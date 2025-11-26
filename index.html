@@ -108,6 +108,11 @@
       border: 1px solid #fbc02d;
     }
 
+    .icon-switch {
+      background: #d9ffd9;
+      border: 1px solid #33aa33;
+    }
+
     .tool-label-main {
       font-size: 14px;
       font-weight: 600;
@@ -254,6 +259,17 @@
       background: #ffd54f;
       color: #444;
       box-shadow: 0 0 16px rgba(255, 160, 0, 1);
+    }
+
+    .component-switch .component-inner {
+      background: #d9ffd9;
+      border: 1px solid #33aa33;
+      transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .component-switch.closed .component-inner {
+      background: #b8ffb8;
+      box-shadow: 0 0 8px rgba(0, 200, 0, 0.8);
     }
 
     .component-label {
@@ -556,6 +572,14 @@
           </div>
         </div>
 
+        <div class="tool-item" draggable="true" data-component="switch">
+          <div class="tool-icon icon-switch">🔘</div>
+          <div>
+            <div class="tool-label-main">Switch</div>
+            <div class="tool-label-sub">Open / Closed</div>
+          </div>
+        </div>
+
         <div class="tool-item" id="eraserTool" data-tool="eraser">
           <div class="tool-icon icon-eraser">✕</div>
           <div>
@@ -574,8 +598,9 @@
         • Drag a part from the left onto the grid.<br />
         • Drag placed parts to move them around.<br />
         <strong>• Double-click a battery or resistor to set its value.</strong><br />
+        <strong>• Double-click a switch to toggle OPEN / CLOSED.</strong><br />
         • Click and drag from a connection point to connect components.<br />
-        <strong>• Drag a light bulb on top of a resistor to “attach” it.</strong><br />
+        <strong>• Drag a light bulb near a resistor to “attach” it.</strong><br />
         • Bulb brightness shows power in that resistor.<br />
         • Select the eraser tool and click on items to delete them.<br />
         • Click "Run Simulation" to analyze the circuit.
@@ -620,11 +645,9 @@
       const n = A.length;
       if (n === 0) return [];
 
-      // Build augmented matrix
       const M = A.map((row, i) => row.slice().concat([b[i]]));
 
       for (let col = 0; col < n; col++) {
-        // Find pivot
         let pivotRow = col;
         let maxAbs = Math.abs(M[col][col]);
         for (let r = col + 1; r < n; r++) {
@@ -635,20 +658,17 @@
           }
         }
         if (maxAbs < 1e-12) {
-          return null; // singular
+          return null;
         }
-        // Swap to top
         if (pivotRow !== col) {
           const tmp = M[col];
           M[col] = M[pivotRow];
           M[pivotRow] = tmp;
         }
-        // Normalize pivot row
         const pivot = M[col][col];
         for (let c = col; c <= n; c++) {
           M[col][c] /= pivot;
         }
-        // Eliminate column from other rows
         for (let r = 0; r < n; r++) {
           if (r === col) continue;
           const factor = M[r][col];
@@ -885,12 +905,28 @@
         inner.appendChild(label);
         inner.appendChild(property);
         comp.classList.add("off");
+      } else if (type === "switch") {
+        comp.dataset.state = "open";
+        const symbol = document.createElement("span");
+        symbol.classList.add("component-symbol");
+        symbol.textContent = "⏯";
+        const label = document.createElement("span");
+        label.classList.add("component-label");
+        label.textContent = "Switch";
+
+        const property = document.createElement("div");
+        property.classList.add("component-property");
+        property.textContent = "Open";
+
+        inner.appendChild(symbol);
+        inner.appendChild(label);
+        inner.appendChild(property);
       }
 
       comp.appendChild(inner);
       canvas.appendChild(comp);
 
-      if (type === "battery" || type === "resistor") {
+      if (type === "battery" || type === "resistor" || type === "switch") {
         addConnectionPoints(comp);
       }
 
@@ -900,10 +936,28 @@
         if (e.target.classList.contains("connection-point")) return;
         if (type === "battery" || type === "resistor") {
           openConfigurationPanel(comp);
+        } else if (type === "switch") {
+          toggleSwitch(comp);
         }
       });
 
       return comp;
+    }
+
+    function toggleSwitch(comp) {
+      const newState = comp.dataset.state === "open" ? "closed" : "open";
+      comp.dataset.state = newState;
+
+      const property = comp.querySelector(".component-property");
+      if (property) property.textContent = newState.charAt(0).toUpperCase() + newState.slice(1);
+
+      if (newState === "closed") {
+        comp.classList.add("closed");
+      } else {
+        comp.classList.remove("closed");
+      }
+
+      statusEl.innerHTML = `Status: <strong>Switch turned ${newState.toUpperCase()}.</strong>`;
     }
 
     function openConfigurationPanel(comp) {
@@ -1043,6 +1097,9 @@
         createConnectionPoint(comp, 0, 50, "positive");
         createConnectionPoint(comp, 100, 50, "negative");
       } else if (type === "resistor") {
+        createConnectionPoint(comp, 0, 50, "end1");
+        createConnectionPoint(comp, 100, 50, "end2");
+      } else if (type === "switch") {
         createConnectionPoint(comp, 0, 50, "end1");
         createConnectionPoint(comp, 100, 50, "end2");
       }
@@ -1198,6 +1255,31 @@
         line
       });
     }
+	
+	/* --- NEW FEATURE: Click a terminal/joint to break wires --- */
+canvas.addEventListener("click", e => {
+  if (activeTool === "eraser") return; // eraser already handles deletion
+  if (!e.target.classList.contains("connection-point")) return;
+
+  const compId = e.target.dataset.componentId;
+  const terminal = e.target.dataset.type;
+  const termKey = compId + ":" + terminal;
+
+  const removeList = connections.filter(
+    c => (c.comp1 + ":" + c.point1 === termKey) || (c.comp2 + ":" + c.point2 === termKey)
+  );
+
+  if (removeList.length === 0) return;
+
+  removeList.forEach(conn => {
+    if (conn.line && conn.line.parentElement) conn.line.remove();
+    const idx = connections.indexOf(conn);
+    if (idx >= 0) connections.splice(idx, 1);
+  });
+
+  statusEl.innerHTML = `Status: <strong>Disconnected joint ${terminal} on component ${compId}</strong>`;
+});
+
 
     /* --------- Simulation button --------- */
 
@@ -1218,6 +1300,7 @@
       const components = Array.from(document.querySelectorAll('.component'));
       const batteries = components.filter(c => c.dataset.type === 'battery');
       const resistors = components.filter(c => c.dataset.type === 'resistor');
+      const switches = components.filter(c => c.dataset.type === 'switch');
 
       if (batteries.length === 0) {
         return { error: "No battery found in the circuit. Add a battery to power the circuit." };
@@ -1228,14 +1311,13 @@
       if (resistors.length === 0) {
         return { error: "No resistors found in the circuit. Add at least one resistor." };
       }
-      if (connections.length === 0) {
+      if (connections.length === 0 && switches.length === 0) {
         return { error: "No wires found. Connect components using wires between terminals." };
       }
 
       const batteryComp = batteries[0];
       const Vb = parseFloat(batteryComp.dataset.voltage);
 
-      // Collect all connection points (terminals)
       const points = Array.from(document.querySelectorAll(".connection-point"));
       if (points.length === 0) {
         return { error: "No terminals are connected. Add wires between terminals to form a circuit." };
@@ -1251,30 +1333,40 @@
         termIdToIndex[termId] = idx;
       });
 
-      // Union-Find to group terminals into nodes
       const parent = new Array(terminals.length);
       for (let i = 0; i < parent.length; i++) parent[i] = i;
 
-      function find(i) {
+      function findUF(i) {
         while (parent[i] !== i) {
           parent[i] = parent[parent[i]];
           i = parent[i];
         }
         return i;
       }
-      function union(i, j) {
-        const ri = find(i);
-        const rj = find(j);
+      function unionUF(i, j) {
+        const ri = findUF(i);
+        const rj = findUF(j);
         if (ri !== rj) parent[rj] = ri;
       }
 
+      // Wires
       connections.forEach(conn => {
         const id1 = conn.comp1 + ":" + conn.point1;
         const id2 = conn.comp2 + ":" + conn.point2;
         const i1 = termIdToIndex[id1];
         const i2 = termIdToIndex[id2];
         if (i1 === undefined || i2 === undefined) return;
-        union(i1, i2);
+        unionUF(i1, i2);
+      });
+
+      // Closed switches act like wires (ideal short)
+      switches.forEach(sw => {
+        if (sw.dataset.state !== "closed") return;
+        const cid = sw.dataset.id;
+        const t1 = termIdToIndex[cid + ":end1"];
+        const t2 = termIdToIndex[cid + ":end2"];
+        if (t1 === undefined || t2 === undefined) return;
+        unionUF(t1, t2);
       });
 
       const rootToNodeId = {};
@@ -1282,7 +1374,7 @@
       const terminalToNode = {};
 
       for (let i = 0; i < terminals.length; i++) {
-        const root = find(i);
+        const root = findUF(i);
         if (!(root in rootToNodeId)) {
           rootToNodeId[root] = "n" + (nodeCounter++);
         }
@@ -1318,7 +1410,6 @@
         }
       });
 
-      // Build adjacency for BFS over resistor graph
       const adj = {};
       function addEdge(u, v) {
         if (!adj[u]) adj[u] = [];
@@ -1336,7 +1427,6 @@
         return { error: "Battery is not connected to any resistors. Add wires from the battery to the resistors." };
       }
 
-      // BFS from battery positive to find active nodes
       const activeNodes = new Set();
       const queue = [posNode];
       activeNodes.add(posNode);
@@ -1369,7 +1459,6 @@
       nodeVolts[negNode] = 0;
       nodeVolts[posNode] = Vb;
 
-      // Node-voltage method for unknown nodes
       if (unknownNodes.length > 0) {
         const N = unknownNodes.length;
         const idxMap = {};
@@ -1423,7 +1512,6 @@
         });
       }
 
-      // Compute resistor currents and power
       let maxPower = 0;
       let totalCurrentFromBattery = 0;
       const resistorData = [];
@@ -1461,7 +1549,6 @@
 
         if (P > maxPower) maxPower = P;
 
-        // current leaving battery positive
         if (node1 === posNode && V1 !== undefined && V2 !== undefined) {
           totalCurrentFromBattery += (V1 - V2) / R;
         } else if (node2 === posNode && V1 !== undefined && V2 !== undefined) {
@@ -1659,7 +1746,7 @@
         comp.classList.add("component-selected");
 
         document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
+        document.addEventListener("mouseup", onMouseUpDrag);
       });
     }
 
@@ -1720,7 +1807,7 @@
       });
     }
 
-    function onMouseUp() {
+    function onMouseUpDrag() {
       if (!dragState) return;
 
       const { comp } = dragState;
@@ -1747,7 +1834,7 @@
 
       dragState = null;
       document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("mouseup", onMouseUpDrag);
 
       statusEl.innerHTML = 'Status: <strong>Component moved.</strong>';
     }
