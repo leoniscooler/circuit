@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Drag & Drop Circuit Builder</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f8;
+      color: #222;
+      display: flex;
+      height: 100vh;
+    }
+
+    #sidebar {
+      width: 260px;
+      padding: 16px;
+      border-right: 1px solid #ddd;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+
+    h2 {
+      font-size: 14px;
+      margin: 0 0 6px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #666;
+    }
+
+    #toolbox {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tool-item {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fafafa;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: grab;
+      user-select: none;
+      transition: box-shadow 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    }
+
+    .tool-item:active {
+      cursor: grabbing;
+      transform: scale(0.98);
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.04);
+    }
+
+    .tool-item.active {
+      background: #e0f3ff;
+      border-color: #4a90e2;
+      box-shadow: 0 0 0 2px rgba(74,144,226,0.2);
+    }
+
+    .tool-item.eraser-active {
+      background: #ffebee;
+      border-color: #f44336;
+      box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+    }
+
+    .tool-icon {
+      width: 32px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .icon-battery {
+      background: #ffe9b8;
+      border: 1px solid #f4b03b;
+    }
+
+    .icon-resistor {
+      background: #e0f3ff;
+      border: 1px solid #4a90e2;
+    }
+
+    .icon-eraser {
+      background: #ffebee;
+      border: 1px solid #f44336;
+    }
+
+    .tool-label-main {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .tool-label-sub {
+      font-size: 11px;
+      color: #777;
+    }
+
+    #controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    #controls button {
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: none;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+    }
+
+    #runBtn {
+      background: #00cc66;
+      color: white;
+    }
+
+    #runBtn:hover {
+      background: #00b359;
+    }
+
+    #clearCanvasBtn {
+      background: #4a90e2;
+      color: white;
+    }
+
+    #clearCanvasBtn:hover {
+      background: #3a79bf;
+    }
+
+    #controls button:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    #instructions {
+      font-size: 11px;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    #workspace-container {
+      flex: 1;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #workspace-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #workspace-header span {
+      font-size: 13px;
+      color: #666;
+    }
+
+    #canvas {
+      flex: 1;
+      border-radius: 12px;
+      background:
+        linear-gradient(to right, #eeeeee 1px, transparent 1px),
+        linear-gradient(to bottom, #eeeeee 1px, transparent 1px);
+      background-size: 20px 20px;
+      background-color: #fbfbfd;
+      border: 1px solid #ddd;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .component {
+      position: absolute;
+      cursor: move;
+      user-select: none;
+      transform-origin: center center;
+    }
+
+    .component-inner {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #555;
+      background: #fff;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      pointer-events: none; /* so dragging works on the parent */
+    }
+
+    .component-battery .component-inner {
+      background: #ffe9b8;
+      border-color: #f4a63b;
+    }
+
+    .component-resistor .component-inner {
+      background: #e0f3ff;
+      border-color: #4a90e2;
+    }
+
+    .component-label {
+      font-weight: 600;
+    }
+
+    .component-symbol {
+      font-family: monospace;
+      font-size: 13px;
+    }
+
+    .component-hint {
+      font-size: 9px;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .component-selected .component-inner {
+      box-shadow: 0 0 0 2px rgba(74,144,226,0.7);
+    }
+
+    .component-eraser-hover {
+      opacity: 0.7;
+      box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.5) !important;
+    }
+
+    #status {
+      font-size: 11px;
+      color: #666;
+    }
+
+    #status strong {
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* Connection points */
+    .connection-point {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #4a90e2;
+      cursor: pointer;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+      transition: all 0.2s ease;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+    }
+
+    .connection-point:hover {
+      background: #2a70c2;
+      transform: translate(-50%, -50%) scale(1.2);
+    }
+
+    .connection-point.active {
+      background: #ffcc00;
+      box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.4);
+    }
+
+    .connection-point.valid-target {
+      background: #00cc66;
+      transform: translate(-50%, -50%) scale(1.3);
+    }
+
+    /* Connection lines */
+    .connection-line {
+      position: absolute;
+      background: #4a90e2;
+      height: 3px;
+      transform-origin: left center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .connection-line.active {
+      background: #ffcc00;
+      box-shadow: 0 0 3px rgba(255, 204, 0, 0.5);
+    }
+
+    .connection-line.eraser-hover {
+      background: #f44336;
+      box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.3);
+    }
+
+    .temp-connection-line {
+      position: absolute;
+      background: #ffcc00;
+      height: 3px;
+      transform-origin: left center;
+      pointer-events: none;
+      z-index: 6;
+      box-shadow: 0 0 3px rgba(255, 204, 0, 0.5);
+    }
+
+    /* Configuration Panel */
+    .config-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      z-index: 100;
+      min-width: 280px;
+      border: 1px solid #ddd;
+    }
+
+    .config-panel h3 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+
+    .config-group {
+      margin-bottom: 16px;
+    }
+
+    .config-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #555;
+    }
+
+    .config-group input[type="number"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .config-group input[type="range"] {
+      width: 100%;
+      margin: 8px 0;
+    }
+
+    .config-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .config-buttons button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .config-buttons .save-btn {
+      background: #4a90e2;
+      color: white;
+    }
+
+    .config-buttons .save-btn:hover {
+      background: #3a79bf;
+    }
+
+    .config-buttons .cancel-btn {
+      background: #f5f5f5;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .config-buttons .cancel-btn:hover {
+      background: #e9e9e9;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99;
+    }
+
+    .component-property {
+      font-size: 10px;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .resistance-display {
+      font-size: 10px;
+      color: #333;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+
+    /* Physics Results Panel */
+    .physics-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      z-index: 100;
+      min-width: 320px;
+      border: 1px solid #ddd;
+    }
+
+    .physics-panel h3 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 8px;
+    }
+
+    .physics-results {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .physics-result-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .physics-result-item:last-child {
+      border-bottom: none;
+    }
+
+    .physics-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .physics-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: #4a90e2;
+    }
+
+    .circuit-type {
+      font-size: 12px;
+      color: #666;
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    .error-message {
+      background: #ffebee;
+      border: 1px solid #f44336;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: #c62828;
+    }
+
+    .cursor-eraser {
+      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="%23f44336" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-8 8z"/></svg>') 12 12, auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div>
+      <h1>Circuit Builder</h1>
+      <div style="font-size:12px;color:#666;margin-top:4px;">
+        Drag parts onto the grid to make series and parallel circuits.
+      </div>
+    </div>
+
+    <div>
+      <h2>Tools</h2>
+      <div id="toolbox">
+        <div class="tool-item" draggable="true" data-component="battery">
+          <div class="tool-icon icon-battery">🔋</div>
+          <div>
+            <div class="tool-label-main">Battery</div>
+            <div class="tool-label-sub">Voltage source</div>
+          </div>
+        </div>
+
+        <div class="tool-item" draggable="true" data-component="resistor">
+          <div class="tool-icon icon-resistor">〰</div>
+          <div>
+            <div class="tool-label-main">Resistor</div>
+            <div class="tool-label-sub">Limits current</div>
+          </div>
+        </div>
+
+        <div class="tool-item" id="eraserTool" data-tool="eraser">
+          <div class="tool-icon icon-eraser">✕</div>
+          <div>
+            <div class="tool-label-main">Eraser</div>
+            <div class="tool-label-sub">Remove components</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="controls">
+      <button id="runBtn">Run Simulation</button>
+      <button id="clearCanvasBtn">Clear workspace</button>
+      <div id="instructions">
+        <strong>How to use:</strong><br />
+        • Drag a part from the left onto the grid.<br />
+        • Drag placed parts to move them around.<br />
+        • Double-click a battery or resistor to configure its properties.<br />
+        • Click and drag from a connection point to connect components.<br />
+        • Select the eraser tool and click on components to delete them.<br />
+        • Click the eraser tool again to unselect it.<br />
+        • Click "Run Simulation" to calculate circuit physics.
+      </div>
+    </div>
+  </div>
+
+  <div id="workspace-container">
+    <div id="workspace-header">
+      <h2 style="margin:0;">Workspace</h2>
+      <span id="workspaceHint">Tip: drag components from the toolbox to begin</span>
+    </div>
+    <div id="canvas"></div>
+    <div id="status">Status: <strong>Drag a part from the toolbox to begin.</strong></div>
+  </div>
+
+  <script>
+    const toolboxItems = document.querySelectorAll(".tool-item");
+    const canvas = document.getElementById("canvas");
+    const statusEl = document.getElementById("status");
+    const clearBtn = document.getElementById("clearCanvasBtn");
+    const runBtn = document.getElementById("runBtn");
+    const eraserTool = document.getElementById("eraserTool");
+    const workspaceHint = document.getElementById("workspaceHint");
+
+    const GRID_SIZE = 20;
+    let dragState = null; // for dragging placed components
+    let connectionState = {
+      activePoint: null,
+      tempLine: null,
+      isConnecting: false
+    };
+    let hoveredPoint = null;
+    let activeTool = null; // 'battery', 'resistor', or 'eraser'
+
+    // --- Tool Selection ---
+
+    toolboxItems.forEach(item => {
+      item.addEventListener("click", (e) => {
+        // Skip if it's a draggable component (those use drag & drop)
+        if (item.draggable) return;
+        
+        const tool = item.dataset.tool;
+        
+        // Toggle eraser tool - if already active, deactivate it
+        if (tool === "eraser") {
+          if (activeTool === "eraser") {
+            // Deactivate eraser
+            item.classList.remove("eraser-active");
+            canvas.classList.remove("cursor-eraser");
+            activeTool = null;
+            workspaceHint.textContent = "Tip: drag components from the toolbox to begin";
+            statusEl.innerHTML = 'Status: <strong>Eraser tool deactivated.</strong>';
+          } else {
+            // Activate eraser
+            item.classList.add("eraser-active");
+            canvas.classList.add("cursor-eraser");
+            activeTool = "eraser";
+            workspaceHint.textContent = "Tip: click on components or connections to delete them";
+            statusEl.innerHTML = 'Status: <strong>Eraser tool selected. Click on components to delete them.</strong>';
+          }
+        }
+      });
+    });
+
+    // --- Toolbox drag source (HTML5 DnD) ---
+
+    toolboxItems.forEach(item => {
+      item.addEventListener("dragstart", (e) => {
+        const type = item.dataset.component;
+        if (!type) return; // Skip if not a component (like eraser)
+        
+        e.dataTransfer.setData("componentType", type);
+        e.dataTransfer.effectAllowed = "copy";
+        statusEl.innerHTML = 'Status: <strong>Dragging a ' + type + '…</strong>';
+      });
+    });
+
+    canvas.addEventListener("dragover", (e) => {
+      e.preventDefault(); // allow drop
+      e.dataTransfer.dropEffect = "copy";
+    });
+
+    canvas.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const type = e.dataTransfer.getData("componentType");
+      if (!type) return;
+
+      const rect = canvas.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
+
+      // snap to grid
+      x = Math.round(x / GRID_SIZE) * GRID_SIZE;
+      y = Math.round(y / GRID_SIZE) * GRID_SIZE;
+
+      createComponent(type, x, y);
+      statusEl.innerHTML = 'Status: <strong>Placed a ' + type + '.</strong>';
+    });
+
+    // --- Eraser Tool Functionality ---
+
+    canvas.addEventListener("click", (e) => {
+      if (activeTool !== "eraser") return;
+      
+      // Find if we clicked on a component
+      let target = e.target;
+      
+      // If we clicked on a connection point, get its parent component
+      if (target.classList.contains("connection-point")) {
+        target = target.parentElement;
+      }
+      
+      // If we clicked on a component inner element, get the component
+      if (target.classList.contains("component-inner")) {
+        target = target.parentElement;
+      }
+      
+      // If we clicked on a component, delete it
+      if (target.classList.contains("component")) {
+        deleteComponent(target);
+        return;
+      }
+      
+      // If we clicked on a connection line, delete it
+      if (target.classList.contains("connection-line")) {
+        deleteConnection(target);
+        return;
+      }
+    });
+
+    // Add hover effects for eraser tool
+    canvas.addEventListener("mouseover", (e) => {
+      if (activeTool !== "eraser") return;
+      
+      let target = e.target;
+      
+      // If we're over a connection point, get its parent component
+      if (target.classList.contains("connection-point")) {
+        target = target.parentElement;
+      }
+      
+      // If we're over a component inner element, get the component
+      if (target.classList.contains("component-inner")) {
+        target = target.parentElement;
+      }
+      
+      // Add hover effect to components
+      if (target.classList.contains("component")) {
+        target.classList.add("component-eraser-hover");
+      }
+      
+      // Add hover effect to connection lines
+      if (target.classList.contains("connection-line")) {
+        target.classList.add("eraser-hover");
+      }
+    });
+
+    canvas.addEventListener("mouseout", (e) => {
+      if (activeTool !== "eraser") return;
+      
+      let target = e.target;
+      
+      // If we're leaving a connection point, get its parent component
+      if (target.classList.contains("connection-point")) {
+        target = target.parentElement;
+      }
+      
+      // If we're leaving a component inner element, get the component
+      if (target.classList.contains("component-inner")) {
+        target = target.parentElement;
+      }
+      
+      // Remove hover effect from components
+      if (target.classList.contains("component")) {
+        target.classList.remove("component-eraser-hover");
+      }
+      
+      // Remove hover effect from connection lines
+      if (target.classList.contains("connection-line")) {
+        target.classList.remove("eraser-hover");
+      }
+    });
+
+    function deleteComponent(component) {
+      const componentId = component.dataset.id;
+      
+      // Remove all connections associated with this component
+      const connectionsToRemove = connections.filter(conn => 
+        conn.comp1 === componentId || conn.comp2 === componentId
+      );
+      
+      connectionsToRemove.forEach(conn => {
+        // Remove the connection line from canvas
+        if (conn.line && conn.line.parentElement) {
+          conn.line.parentElement.removeChild(conn.line);
+        }
+        
+        // Remove from connections array
+        const index = connections.indexOf(conn);
+        if (index > -1) {
+          connections.splice(index, 1);
+        }
+      });
+      
+      // Remove the component
+      component.remove();
+      
+      statusEl.innerHTML = 'Status: <strong>Component deleted.</strong>';
+    }
+
+    function deleteConnection(connectionLine) {
+      const connectionId = connectionLine.dataset.id;
+      
+      // Find the connection in our array
+      const connectionIndex = connections.findIndex(conn => conn.id === connectionId);
+      
+      if (connectionIndex > -1) {
+        // Remove the connection line from canvas
+        connectionLine.remove();
+        
+        // Remove from connections array
+        connections.splice(connectionIndex, 1);
+        
+        statusEl.innerHTML = 'Status: <strong>Connection deleted.</strong>';
+      }
+    }
+
+    // --- Create components ---
+
+    let componentIdCounter = 1;
+    let connectionIdCounter = 1;
+    const connections = [];
+
+    function createComponent(type, x, y) {
+      const comp = document.createElement("div");
+      comp.classList.add("component", "component-" + type);
+      comp.dataset.type = type;
+      comp.dataset.id = "c" + componentIdCounter++;
+      comp.style.left = (x - 20) + "px";
+      comp.style.top = (y - 10) + "px";
+
+      // Set default properties
+      if (type === "battery") {
+        comp.dataset.voltage = "9"; // Default voltage
+      } else if (type === "resistor") {
+        comp.dataset.resistance = "100"; // Default resistance in ohms
+      }
+
+      const inner = document.createElement("div");
+      inner.classList.add("component-inner");
+
+      if (type === "battery") {
+        const symbol = document.createElement("span");
+        symbol.classList.add("component-symbol");
+        symbol.textContent = "║‖";
+        const label = document.createElement("span");
+        label.classList.add("component-label");
+        label.textContent = comp.dataset.voltage + "V";
+        
+        const property = document.createElement("div");
+        property.classList.add("component-property");
+        property.textContent = comp.dataset.voltage + "V Battery";
+        
+        inner.appendChild(symbol);
+        inner.appendChild(label);
+        inner.appendChild(property);
+      } else if (type === "resistor") {
+        const symbol = document.createElement("span");
+        symbol.classList.add("component-symbol");
+        symbol.textContent = "⏤⏤⏤";
+        const label = document.createElement("span");
+        label.classList.add("component-label");
+        label.textContent = "R";
+        
+        const resistanceDisplay = document.createElement("span");
+        resistanceDisplay.classList.add("resistance-display");
+        resistanceDisplay.textContent = formatResistance(comp.dataset.resistance);
+        
+        const property = document.createElement("div");
+        property.classList.add("component-property");
+        property.textContent = "Resistor";
+        
+        inner.appendChild(symbol);
+        inner.appendChild(label);
+        inner.appendChild(resistanceDisplay);
+        inner.appendChild(property);
+      }
+
+      comp.appendChild(inner);
+      canvas.appendChild(comp);
+
+      // Add connection points
+      addConnectionPoints(comp);
+      makeComponentDraggable(comp);
+
+      // Add double-click for configuration
+      comp.addEventListener("dblclick", (e) => {
+        if (e.target.classList.contains("connection-point")) return;
+        openConfigurationPanel(comp);
+      });
+
+      return comp;
+    }
+
+    function openConfigurationPanel(comp) {
+      // Create overlay
+      const overlay = document.createElement("div");
+      overlay.classList.add("overlay");
+      canvas.appendChild(overlay);
+
+      // Create configuration panel
+      const panel = document.createElement("div");
+      panel.classList.add("config-panel");
+
+      const type = comp.dataset.type;
+      let title = "";
+      let content = "";
+
+      if (type === "battery") {
+        title = "Configure Battery";
+        content = `
+          <div class="config-group">
+            <label for="voltage">Voltage (V)</label>
+            <input type="number" id="voltage" min="1" max="100" value="${comp.dataset.voltage}" step="0.1">
+            <input type="range" id="voltageRange" min="1" max="100" value="${comp.dataset.voltage}" step="0.1">
+          </div>
+        `;
+      } else if (type === "resistor") {
+        title = "Configure Resistor";
+        content = `
+          <div class="config-group">
+            <label for="resistance">Resistance (Ω)</label>
+            <input type="number" id="resistance" min="1" max="1000000" value="${comp.dataset.resistance}" step="1">
+            <input type="range" id="resistanceRange" min="1" max="10000" value="${Math.min(comp.dataset.resistance, 10000)}" step="1">
+            <div style="font-size:11px;color:#666;margin-top:4px;">
+              Range: 1Ω to 1MΩ (1,000,000Ω)
+            </div>
+          </div>
+        `;
+      }
+
+      panel.innerHTML = `
+        <h3>${title}</h3>
+        ${content}
+        <div class="config-buttons">
+          <button class="cancel-btn">Cancel</button>
+          <button class="save-btn">Save Changes</button>
+        </div>
+      `;
+
+      canvas.appendChild(panel);
+
+      // Sync range and number inputs
+      if (type === "battery") {
+        const voltageInput = panel.querySelector("#voltage");
+        const voltageRange = panel.querySelector("#voltageRange");
+        
+        voltageInput.addEventListener("input", () => {
+          voltageRange.value = voltageInput.value;
+        });
+        
+        voltageRange.addEventListener("input", () => {
+          voltageInput.value = voltageRange.value;
+        });
+      } else if (type === "resistor") {
+        const resistanceInput = panel.querySelector("#resistance");
+        const resistanceRange = panel.querySelector("#resistanceRange");
+        
+        resistanceInput.addEventListener("input", () => {
+          const value = Math.min(10000, resistanceInput.value);
+          resistanceRange.value = value;
+        });
+        
+        resistanceRange.addEventListener("input", () => {
+          resistanceInput.value = resistanceRange.value;
+        });
+      }
+
+      // Save button handler
+      panel.querySelector(".save-btn").addEventListener("click", () => {
+        if (type === "battery") {
+          const voltage = panel.querySelector("#voltage").value;
+          comp.dataset.voltage = voltage;
+          updateComponentDisplay(comp);
+          statusEl.innerHTML = `Status: <strong>Battery voltage set to ${voltage}V.</strong>`;
+        } else if (type === "resistor") {
+          const resistance = panel.querySelector("#resistance").value;
+          comp.dataset.resistance = resistance;
+          updateComponentDisplay(comp);
+          statusEl.innerHTML = `Status: <strong>Resistance set to ${resistance}Ω.</strong>`;
+        }
+        
+        // Close panel
+        panel.remove();
+        overlay.remove();
+      });
+
+      // Cancel button handler
+      panel.querySelector(".cancel-btn").addEventListener("click", () => {
+        panel.remove();
+        overlay.remove();
+        statusEl.innerHTML = 'Status: <strong>Configuration cancelled.</strong>';
+      });
+
+      // Close on overlay click
+      overlay.addEventListener("click", () => {
+        panel.remove();
+        overlay.remove();
+        statusEl.innerHTML = 'Status: <strong>Configuration cancelled.</strong>';
+      });
+    }
+
+    function updateComponentDisplay(comp) {
+      const type = comp.dataset.type;
+      const inner = comp.querySelector(".component-inner");
+      
+      if (type === "battery") {
+        const label = inner.querySelector(".component-label");
+        const property = inner.querySelector(".component-property");
+        label.textContent = comp.dataset.voltage + "V";
+        property.textContent = comp.dataset.voltage + "V Battery";
+      } else if (type === "resistor") {
+        const resistanceDisplay = inner.querySelector(".resistance-display");
+        resistanceDisplay.textContent = formatResistance(comp.dataset.resistance);
+      }
+    }
+
+    function formatResistance(resistance) {
+      const r = parseInt(resistance);
+      if (r >= 1000000) {
+        return (r / 1000000).toFixed(2) + "MΩ";
+      } else if (r >= 1000) {
+        return (r / 1000).toFixed(1) + "kΩ";
+      } else {
+        return r + "Ω";
+      }
+    }
+
+    function addConnectionPoints(comp) {
+      const type = comp.dataset.type;
+      
+      // Clear any existing connection points
+      const existingPoints = comp.querySelectorAll(".connection-point");
+      existingPoints.forEach(point => point.remove());
+      
+      if (type === "battery") {
+        // Battery has positive and negative terminals
+        createConnectionPoint(comp, 0, 50, "positive");
+        createConnectionPoint(comp, 100, 50, "negative");
+      } else if (type === "resistor") {
+        // Resistor has two connection points
+        createConnectionPoint(comp, 0, 50, "end1");
+        createConnectionPoint(comp, 100, 50, "end2");
+      }
+    }
+
+    function createConnectionPoint(comp, xPercent, yPercent, type) {
+      const point = document.createElement("div");
+      point.classList.add("connection-point");
+      point.dataset.type = type;
+      point.dataset.componentId = comp.dataset.id;
+      point.style.left = `${xPercent}%`;
+      point.style.top = `${yPercent}%`;
+      
+      // Mouse down to start connection
+      point.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        startConnection(comp, point, e);
+      });
+      
+      // Mouse enter to highlight as potential target
+      point.addEventListener("mouseenter", (e) => {
+        if (connectionState.isConnecting && connectionState.activePoint.comp !== comp) {
+          point.classList.add("valid-target");
+          hoveredPoint = point;
+        }
+      });
+      
+      // Mouse leave to remove highlight
+      point.addEventListener("mouseleave", (e) => {
+        point.classList.remove("valid-target");
+        if (hoveredPoint === point) {
+          hoveredPoint = null;
+        }
+      });
+      
+      comp.appendChild(point);
+    }
+
+    function startConnection(comp, point, e) {
+      // Set active connection point
+      connectionState.activePoint = { comp, point };
+      connectionState.isConnecting = true;
+      point.classList.add("active");
+      
+      // Create temporary connection line
+      const tempLine = document.createElement("div");
+      tempLine.classList.add("temp-connection-line");
+      canvas.appendChild(tempLine);
+      connectionState.tempLine = tempLine;
+      
+      // Get starting position
+      const canvasRect = canvas.getBoundingClientRect();
+      const pointRect = point.getBoundingClientRect();
+      const startX = pointRect.left + pointRect.width/2 - canvasRect.left;
+      const startY = pointRect.top + pointRect.height/2 - canvasRect.top;
+      
+      // Update line on mouse move
+      document.addEventListener("mousemove", onConnectionMove);
+      
+      // Finish connection on mouse up
+      document.addEventListener("mouseup", onConnectionUp);
+      
+      statusEl.innerHTML = 'Status: <strong>Drag to another component to connect.</strong>';
+      
+      // Prevent default to avoid component drag
+      e.preventDefault();
+    }
+
+    function onConnectionMove(e) {
+      if (!connectionState.isConnecting || !connectionState.tempLine) return;
+      
+      const canvasRect = canvas.getBoundingClientRect();
+      const pointRect = connectionState.activePoint.point.getBoundingClientRect();
+      
+      const startX = pointRect.left + pointRect.width/2 - canvasRect.left;
+      const startY = pointRect.top + pointRect.height/2 - canvasRect.top;
+      const endX = e.clientX - canvasRect.left;
+      const endY = e.clientY - canvasRect.top;
+      
+      // Calculate line length and angle
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      
+      // Update temporary line
+      connectionState.tempLine.style.width = length + "px";
+      connectionState.tempLine.style.left = startX + "px";
+      connectionState.tempLine.style.top = startY + "px";
+      connectionState.tempLine.style.transform = `rotate(${angle}deg)`;
+    }
+
+    function onConnectionUp(e) {
+      if (!connectionState.isConnecting) return;
+      
+      // If we're hovering over a valid connection point, create the connection
+      if (hoveredPoint && connectionState.activePoint) {
+        const targetComp = document.querySelector(`[data-id="${hoveredPoint.dataset.componentId}"]`);
+        if (targetComp && connectionState.activePoint.comp !== targetComp) {
+          createConnection(
+            connectionState.activePoint.comp, 
+            connectionState.activePoint.point, 
+            targetComp, 
+            hoveredPoint
+          );
+        }
+      }
+      
+      // Clean up connection state
+      finishConnection();
+    }
+
+    function finishConnection() {
+      if (connectionState.activePoint) {
+        connectionState.activePoint.point.classList.remove("active");
+      }
+      
+      if (connectionState.tempLine) {
+        connectionState.tempLine.remove();
+        connectionState.tempLine = null;
+      }
+      
+      // Remove valid-target class from all points
+      document.querySelectorAll(".connection-point.valid-target").forEach(point => {
+        point.classList.remove("valid-target");
+      });
+      
+      connectionState.activePoint = null;
+      connectionState.isConnecting = false;
+      hoveredPoint = null;
+      
+      document.removeEventListener("mousemove", onConnectionMove);
+      document.removeEventListener("mouseup", onConnectionUp);
+      
+      statusEl.innerHTML = 'Status: <strong>Connection completed.</strong>';
+    }
+
+    function createConnection(comp1, point1, comp2, point2) {
+      const id = "conn" + connectionIdCounter++;
+      
+      // Calculate positions
+      const comp1Rect = comp1.getBoundingClientRect();
+      const comp2Rect = comp2.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      
+      const point1Rect = point1.getBoundingClientRect();
+      const point2Rect = point2.getBoundingClientRect();
+      
+      const x1 = point1Rect.left + point1Rect.width/2 - canvasRect.left;
+      const y1 = point1Rect.top + point1Rect.height/2 - canvasRect.top;
+      const x2 = point2Rect.left + point2Rect.width/2 - canvasRect.left;
+      const y2 = point2Rect.top + point2Rect.height/2 - canvasRect.top;
+      
+      // Create connection line
+      const line = document.createElement("div");
+      line.classList.add("connection-line");
+      line.dataset.id = id;
+      
+      // Calculate line length and angle
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      
+      line.style.width = length + "px";
+      line.style.left = x1 + "px";
+      line.style.top = y1 + "px";
+      line.style.transform = `rotate(${angle}deg)`;
+      
+      canvas.appendChild(line);
+      
+      // Store connection data
+      connections.push({
+        id,
+        comp1: comp1.dataset.id,
+        point1: point1.dataset.type,
+        comp2: comp2.dataset.id,
+        point2: point2.dataset.type,
+        line
+      });
+    }
+
+    // --- Run Simulation ---
+
+    runBtn.addEventListener("click", () => {
+      const result = calculateCircuitPhysics();
+      showPhysicsResults(result);
+    });
+
+    function calculateCircuitPhysics() {
+      const components = Array.from(document.querySelectorAll('.component'));
+      const batteries = components.filter(c => c.dataset.type === 'battery');
+      const resistors = components.filter(c => c.dataset.type === 'resistor');
+      
+      // Check for valid circuit
+      if (batteries.length === 0) {
+        return {
+          error: "No battery found in the circuit. Add a battery to power the circuit."
+        };
+      }
+      
+      if (batteries.length > 1) {
+        return {
+          error: "Multiple batteries detected. This simulation only supports circuits with one battery."
+        };
+      }
+      
+      if (resistors.length === 0) {
+        return {
+          error: "No resistors found in the circuit. Add at least one resistor."
+        };
+      }
+      
+      if (connections.length === 0) {
+        return {
+          error: "No connections found. Connect components to form a complete circuit."
+        };
+      }
+      
+      // Get battery voltage
+      const batteryVoltage = parseFloat(batteries[0].dataset.voltage);
+      
+      // Calculate total resistance
+      let totalResistance = 0;
+      
+      // Simple series circuit calculation (for demo purposes)
+      // In a real implementation, you would analyze the circuit topology
+      resistors.forEach(resistor => {
+        totalResistance += parseFloat(resistor.dataset.resistance);
+      });
+      
+      // Calculate current using Ohm's Law: I = V / R
+      const current = batteryVoltage / totalResistance;
+      
+      // Calculate power: P = V * I
+      const power = batteryVoltage * current;
+      
+      // Determine circuit type (simplified)
+      const circuitType = resistors.length > 1 ? "Series Circuit" : "Simple Circuit";
+      
+      return {
+        batteryVoltage,
+        totalResistance,
+        current,
+        power,
+        circuitType,
+        resistorCount: resistors.length,
+        error: null
+      };
+    }
+
+    function showPhysicsResults(result) {
+      // Create overlay
+      const overlay = document.createElement("div");
+      overlay.classList.add("overlay");
+      canvas.appendChild(overlay);
+
+      // Create physics panel
+      const panel = document.createElement("div");
+      panel.classList.add("physics-panel");
+
+      let content = '';
+      
+      if (result.error) {
+        content = `
+          <div class="error-message">
+            <strong>Simulation Error</strong><br>
+            ${result.error}
+          </div>
+        `;
+      } else {
+        content = `
+          <h3>Circuit Analysis Results</h3>
+          <div class="physics-results">
+            <div class="physics-result-item">
+              <span class="physics-label">Circuit Type:</span>
+              <span class="physics-value">${result.circuitType}</span>
+            </div>
+            <div class="physics-result-item">
+              <span class="physics-label">Battery Voltage:</span>
+              <span class="physics-value">${result.batteryVoltage} V</span>
+            </div>
+            <div class="physics-result-item">
+              <span class="physics-label">Total Resistance:</span>
+              <span class="physics-value">${formatResistance(result.totalResistance)}</span>
+            </div>
+            <div class="physics-result-item">
+              <span class="physics-label">Current:</span>
+              <span class="physics-value">${result.current.toFixed(4)} A</span>
+            </div>
+            <div class="physics-result-item">
+              <span class="physics-label">Power:</span>
+              <span class="physics-value">${result.power.toFixed(4)} W</span>
+            </div>
+            <div class="physics-result-item">
+              <span class="physics-label">Resistors:</span>
+              <span class="physics-value">${result.resistorCount}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      panel.innerHTML = `
+        ${content}
+        <div class="config-buttons" style="margin-top: 20px;">
+          <button class="cancel-btn">Close</button>
+        </div>
+      `;
+
+      canvas.appendChild(panel);
+
+      // Close button handler
+      panel.querySelector(".cancel-btn").addEventListener("click", () => {
+        panel.remove();
+        overlay.remove();
+        statusEl.innerHTML = 'Status: <strong>Simulation closed.</strong>';
+      });
+
+      // Close on overlay click
+      overlay.addEventListener("click", () => {
+        panel.remove();
+        overlay.remove();
+        statusEl.innerHTML = 'Status: <strong>Simulation closed.</strong>';
+      });
+      
+      if (!result.error) {
+        statusEl.innerHTML = `Status: <strong>Circuit simulation completed. Total resistance: ${formatResistance(result.totalResistance)}, Current: ${result.current.toFixed(4)}A</strong>`;
+      }
+    }
+
+    // --- Dragging placed components (custom mouse drag) ---
+
+    function makeComponentDraggable(comp) {
+      comp.addEventListener("mousedown", (e) => {
+        // only left click and not on a connection point
+        if (e.button !== 0 || e.target.classList.contains("connection-point")) return;
+
+        e.preventDefault();
+        const rect = comp.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+
+        dragState = {
+          comp: comp,
+          offsetX: e.clientX - rect.left,
+          offsetY: e.clientY - rect.top,
+          canvasRect: canvasRect
+        };
+
+        clearSelection();
+        comp.classList.add("component-selected");
+
+        document.addEventListener("mousemove", onMouseMove);
+        document.addEventListener("mouseup", onMouseUp);
+      });
+    }
+
+    function onMouseMove(e) {
+      if (!dragState) return;
+
+      const { comp, offsetX, offsetY, canvasRect } = dragState;
+
+      let x = e.clientX - canvasRect.left - offsetX;
+      let y = e.clientY - canvasRect.top - offsetY;
+
+      // keep inside canvas
+      const maxX = canvasRect.width - comp.offsetWidth;
+      const maxY = canvasRect.height - comp.offsetHeight;
+
+      x = Math.max(0, Math.min(maxX, x));
+      y = Math.max(0, Math.min(maxY, y));
+
+      comp.style.left = x + "px";
+      comp.style.top = y + "px";
+      
+      // Update any connections for this component
+      updateConnections(comp);
+    }
+
+    function updateConnections(comp) {
+      const compId = comp.dataset.id;
+      
+      connections.forEach(conn => {
+        if (conn.comp1 === compId || conn.comp2 === compId) {
+          // Find the components and points
+          const comp1 = document.querySelector(`[data-id="${conn.comp1}"]`);
+          const comp2 = document.querySelector(`[data-id="${conn.comp2}"]`);
+          
+          if (!comp1 || !comp2) return;
+          
+          const point1 = comp1.querySelector(`[data-type="${conn.point1}"]`);
+          const point2 = comp2.querySelector(`[data-type="${conn.point2}"]`);
+          
+          if (!point1 || !point2) return;
+          
+          // Recalculate line position
+          const comp1Rect = comp1.getBoundingClientRect();
+          const comp2Rect = comp2.getBoundingClientRect();
+          const canvasRect = canvas.getBoundingClientRect();
+          
+          const point1Rect = point1.getBoundingClientRect();
+          const point2Rect = point2.getBoundingClientRect();
+          
+          const x1 = point1Rect.left + point1Rect.width/2 - canvasRect.left;
+          const y1 = point1Rect.top + point1Rect.height/2 - canvasRect.top;
+          const x2 = point2Rect.left + point2Rect.width/2 - canvasRect.left;
+          const y2 = point2Rect.top + point2Rect.height/2 - canvasRect.top;
+          
+          // Update line
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          
+          conn.line.style.width = length + "px";
+          conn.line.style.left = x1 + "px";
+          conn.line.style.top = y1 + "px";
+          conn.line.style.transform = `rotate(${angle}deg)`;
+        }
+      });
+    }
+
+    function onMouseUp(e) {
+      if (!dragState) return;
+
+      const { comp } = dragState;
+
+      // snap to grid on mouse up
+      const canvasRect = canvas.getBoundingClientRect();
+      const compRect = comp.getBoundingClientRect();
+
+      let x = compRect.left - canvasRect.left;
+      let y = compRect.top - canvasRect.top;
+
+      x = Math.round(x / GRID_SIZE) * GRID_SIZE;
+      y = Math.round(y / GRID_SIZE) * GRID_SIZE;
+
+      const maxX = canvasRect.width - comp.offsetWidth;
+      const maxY = canvasRect.height - comp.offsetHeight;
+
+      x = Math.max(0, Math.min(maxX, x));
+      y = Math.max(0, Math.min(maxY, y));
+
+      comp.style.left = x + "px";
+      comp.style.top = y + "px";
+      
+      // Update connections after final position
+      updateConnections(comp);
+
+      dragState = null;
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+
+      statusEl.innerHTML = 'Status: <strong>Component moved.</strong>';
+    }
+
+    function clearSelection() {
+      document.querySelectorAll(".component-selected").forEach(c => {
+        c.classList.remove("component-selected");
+      });
+    }
+
+    // --- Clear button ---
+
+    clearBtn.addEventListener("click", () => {
+      canvas.innerHTML = "";
+      connections.length = 0;
+      statusEl.innerHTML = 'Status: <strong>Workspace cleared.</strong>';
+    });
+  </script>
+</body>
+</html>
