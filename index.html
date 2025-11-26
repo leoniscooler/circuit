@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Leon's Circuit Builder</title>
   <style>
     * {
@@ -15,17 +16,36 @@
       background: #f5f5f8;
       color: #222;
       display: flex;
+      flex-direction: column;
       height: 100vh;
+      overflow: hidden;
     }
 
+    /* Mobile-first responsive layout */
     #sidebar {
-      width: 260px;
-      padding: 16px;
-      border-right: 1px solid #ddd;
+      width: 100%;
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
       background: #ffffff;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
+      overflow-y: auto;
+      max-height: 40vh;
+    }
+
+    /* Desktop layout */
+    @media (min-width: 768px) {
+      body {
+        flex-direction: row;
+      }
+      
+      #sidebar {
+        width: 260px;
+        max-height: 100vh;
+        border-right: 1px solid #ddd;
+        border-bottom: none;
+      }
     }
 
     h1 {
@@ -42,9 +62,16 @@
     }
 
     #toolbox {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
       gap: 8px;
+    }
+
+    @media (min-width: 768px) {
+      #toolbox {
+        display: flex;
+        flex-direction: column;
+      }
     }
 
     .tool-item {
@@ -55,13 +82,13 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      cursor: grab;
+      cursor: pointer;
       user-select: none;
       transition: box-shadow 0.15s ease, transform 0.15s ease, background 0.15s ease;
+      touch-action: manipulation;
     }
 
     .tool-item:active {
-      cursor: grabbing;
       transform: scale(0.98);
       box-shadow: 0 0 0 2px rgba(0,0,0,0.04);
     }
@@ -131,14 +158,15 @@
     }
 
     #controls button {
-      padding: 8px 10px;
+      padding: 10px 12px;
       border-radius: 999px;
       border: none;
-      font-size: 13px;
+      font-size: 14px;
       cursor: pointer;
       font-weight: 600;
       transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
       box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+      touch-action: manipulation;
     }
 
     #runBtn {
@@ -172,10 +200,11 @@
 
     #workspace-container {
       flex: 1;
-      padding: 16px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 8px;
+      overflow: hidden;
     }
 
     #workspace-header {
@@ -199,7 +228,8 @@
       background-color: #fbfbfd;
       border: 1px solid #ddd;
       position: relative;
-      overflow: hidden;
+      overflow: auto;
+      touch-action: none;
     }
 
     .component {
@@ -207,18 +237,20 @@
       cursor: move;
       user-select: none;
       transform-origin: center center;
+      touch-action: none;
     }
 
     .component-inner {
-      padding: 4px 8px;
+      padding: 6px 10px;
       border-radius: 6px;
       border: 1px solid #555;
       background: #fff;
-      font-size: 11px;
+      font-size: 12px;
       display: inline-flex;
       align-items: center;
       gap: 4px;
       pointer-events: none;
+      min-width: 80px;
     }
 
     .component-battery .component-inner {
@@ -308,8 +340,8 @@
 
     .connection-point {
       position: absolute;
-      width: 12px;
-      height: 12px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: #4a90e2;
       cursor: pointer;
@@ -317,6 +349,7 @@
       transform: translate(-50%, -50%);
       transition: all 0.2s ease;
       box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+      touch-action: none;
     }
 
     .connection-point:hover {
@@ -374,6 +407,7 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.2);
       z-index: 100;
       min-width: 280px;
+      max-width: 90vw;
       border: 1px solid #ddd;
     }
 
@@ -399,15 +433,16 @@
 
     .config-group input[type="number"] {
       width: 100%;
-      padding: 8px 12px;
+      padding: 10px 12px;
       border: 1px solid #ddd;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 16px; /* Larger for mobile */
     }
 
     .config-group input[type="range"] {
       width: 100%;
       margin: 8px 0;
+      height: 24px; /* Larger for touch */
     }
 
     .config-buttons {
@@ -418,13 +453,14 @@
     }
 
     .config-buttons button {
-      padding: 8px 16px;
+      padding: 10px 16px;
       border: none;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
+      min-width: 80px;
     }
 
     .config-buttons .save-btn {
@@ -480,6 +516,7 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.2);
       z-index: 100;
       min-width: 320px;
+      max-width: 90vw;
       border: 1px solid #ddd;
     }
 
@@ -533,6 +570,83 @@
 
     .cursor-eraser {
       cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="%23f44336" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-8 8z"/></svg>') 12 12, auto;
+    }
+
+    /* Mobile-specific styles */
+    .mobile-toolbar {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-top: 1px solid #ddd;
+      background: white;
+    }
+
+    @media (min-width: 768px) {
+      .mobile-toolbar {
+        display: none;
+      }
+    }
+
+    .mobile-toolbar button {
+      flex: 1;
+      margin: 0 4px;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #4a90e2;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .mobile-toolbar button:first-child {
+      margin-left: 0;
+    }
+
+    .mobile-toolbar button:last-child {
+      margin-right: 0;
+    }
+
+    .mobile-toolbar button#mobileRunBtn {
+      background: #00cc66;
+    }
+
+    .mobile-toolbar button#mobileClearBtn {
+      background: #ff6b6b;
+    }
+
+    .mobile-toolbar button#mobileEraserBtn {
+      background: #f44336;
+    }
+
+    /* Zoom and pan controls */
+    .zoom-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 20;
+    }
+
+    .zoom-controls button {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    /* Touch-friendly long press detection */
+    .long-press-timer {
+      display: none;
     }
   </style>
 </head>
@@ -600,7 +714,7 @@
         <strong>• Double-click a battery or resistor to set its value.</strong><br />
         <strong>• Double-click a switch to toggle OPEN / CLOSED.</strong><br />
         • Click and drag from a connection point to connect components.<br />
-        <strong>• Drag a light bulb near a resistor to “attach” it.</strong><br />
+        <strong>• Drag a light bulb near a resistor to "attach" it.</strong><br />
         • Bulb brightness shows power in that resistor.<br />
         • Select the eraser tool and click on items to delete them.<br />
         • Click "Run Simulation" to analyze the circuit.
@@ -617,6 +731,20 @@
     <div id="status">Status: <strong>Drag a part from the toolbox to begin.</strong></div>
   </div>
 
+  <!-- Mobile toolbar -->
+  <div class="mobile-toolbar">
+    <button id="mobileRunBtn">Run</button>
+    <button id="mobileClearBtn">Clear</button>
+    <button id="mobileEraserBtn">Eraser</button>
+  </div>
+
+  <!-- Zoom controls -->
+  <div class="zoom-controls">
+    <button id="zoomInBtn">+</button>
+    <button id="zoomOutBtn">-</button>
+    <button id="resetZoomBtn">⟳</button>
+  </div>
+
   <script>
     const toolboxItems = document.querySelectorAll(".tool-item");
     const canvas = document.getElementById("canvas");
@@ -625,6 +753,16 @@
     const runBtn = document.getElementById("runBtn");
     const eraserTool = document.getElementById("eraserTool");
     const workspaceHint = document.getElementById("workspaceHint");
+    
+    // Mobile buttons
+    const mobileRunBtn = document.getElementById("mobileRunBtn");
+    const mobileClearBtn = document.getElementById("mobileClearBtn");
+    const mobileEraserBtn = document.getElementById("mobileEraserBtn");
+    
+    // Zoom controls
+    const zoomInBtn = document.getElementById("zoomInBtn");
+    const zoomOutBtn = document.getElementById("zoomOutBtn");
+    const resetZoomBtn = document.getElementById("resetZoomBtn");
 
     const GRID_SIZE = 20;
     let dragState = null;
@@ -635,6 +773,14 @@
     };
     let hoveredPoint = null;
     let activeTool = null;
+    let isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    let longPressTimer = null;
+    let canvasScale = 1;
+    let canvasTranslateX = 0;
+    let canvasTranslateY = 0;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
 
     let componentIdCounter = 1;
     let connectionIdCounter = 1;
@@ -686,6 +832,70 @@
       return x;
     }
 
+    /* --------- Zoom and Pan Functionality --------- */
+    function updateCanvasTransform() {
+      canvas.style.transform = `translate(${canvasTranslateX}px, ${canvasTranslateY}px) scale(${canvasScale})`;
+      canvas.style.transformOrigin = '0 0';
+    }
+
+    function zoomIn() {
+      canvasScale = Math.min(canvasScale * 1.2, 3);
+      updateCanvasTransform();
+    }
+
+    function zoomOut() {
+      canvasScale = Math.max(canvasScale / 1.2, 0.5);
+      updateCanvasTransform();
+    }
+
+    function resetZoom() {
+      canvasScale = 1;
+      canvasTranslateX = 0;
+      canvasTranslateY = 0;
+      updateCanvasTransform();
+    }
+
+    zoomInBtn.addEventListener('click', zoomIn);
+    zoomOutBtn.addEventListener('click', zoomOut);
+    resetZoomBtn.addEventListener('click', resetZoom);
+
+    // Pan functionality for touch devices
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        // Two-finger touch for panning
+        isPanning = true;
+        panStartX = e.touches[0].clientX - canvasTranslateX;
+        panStartY = e.touches[0].clientY - canvasTranslateY;
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (isPanning && e.touches.length === 2) {
+        canvasTranslateX = e.touches[0].clientX - panStartX;
+        canvasTranslateY = e.touches[0].clientY - panStartY;
+        updateCanvasTransform();
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener('touchend', () => {
+      isPanning = false;
+    });
+
+    /* --------- Mobile button handlers --------- */
+    mobileRunBtn.addEventListener('click', () => {
+      runBtn.click();
+    });
+
+    mobileClearBtn.addEventListener('click', () => {
+      clearBtn.click();
+    });
+
+    mobileEraserBtn.addEventListener('click', () => {
+      eraserTool.click();
+    });
+
     /* --------- Tool selection (eraser toggle) --------- */
 
     toolboxItems.forEach(item => {
@@ -719,6 +929,32 @@
         e.dataTransfer.effectAllowed = "copy";
         statusEl.innerHTML = 'Status: <strong>Dragging a ' + type + '…</strong>';
       });
+      
+      // For touch devices - long press to select component
+      if (isTouchDevice) {
+        item.addEventListener("touchstart", (e) => {
+          const type = item.dataset.component;
+          if (!type) return;
+          
+          longPressTimer = setTimeout(() => {
+            // Create component at center of canvas
+            const rect = canvas.getBoundingClientRect();
+            const x = rect.width / 2;
+            const y = rect.height / 2;
+            
+            createComponent(type, x, y);
+            statusEl.innerHTML = 'Status: <strong>Placed a ' + type + '.</strong>';
+          }, 500);
+        });
+        
+        item.addEventListener("touchend", () => {
+          clearTimeout(longPressTimer);
+        });
+        
+        item.addEventListener("touchmove", () => {
+          clearTimeout(longPressTimer);
+        });
+      }
     });
 
     canvas.addEventListener("dragover", (e) => {
@@ -765,6 +1001,32 @@
         return;
       }
     });
+
+    // Touch support for eraser
+    if (isTouchDevice) {
+      canvas.addEventListener("touchend", (e) => {
+        if (activeTool !== "eraser") return;
+        
+        const touch = e.changedTouches[0];
+        let target = document.elementFromPoint(touch.clientX, touch.clientY);
+
+        if (target.classList.contains("connection-point")) {
+          target = target.parentElement;
+        }
+        if (target.classList.contains("component-inner")) {
+          target = target.parentElement;
+        }
+
+        if (target.classList.contains("component")) {
+          deleteComponent(target);
+          return;
+        }
+        if (target.classList.contains("connection-line")) {
+          deleteConnection(target);
+          return;
+        }
+      });
+    }
 
     canvas.addEventListener("mouseover", (e) => {
       if (activeTool !== "eraser") return;
@@ -940,6 +1202,25 @@
           toggleSwitch(comp);
         }
       });
+
+      // Touch support for double tap
+      if (isTouchDevice) {
+        let lastTap = 0;
+        comp.addEventListener("touchend", (e) => {
+          const currentTime = new Date().getTime();
+          const tapLength = currentTime - lastTap;
+          if (tapLength < 500 && tapLength > 0) {
+            // Double tap detected
+            if (type === "battery" || type === "resistor") {
+              openConfigurationPanel(comp);
+            } else if (type === "switch") {
+              toggleSwitch(comp);
+            }
+            e.preventDefault();
+          }
+          lastTap = currentTime;
+        });
+      }
 
       return comp;
     }
@@ -1118,6 +1399,14 @@
         startConnection(comp, point, e);
       });
 
+      // Touch support for connections
+      if (isTouchDevice) {
+        point.addEventListener("touchstart", (e) => {
+          e.stopPropagation();
+          startConnection(comp, point, e);
+        });
+      }
+
       point.addEventListener("mouseenter", () => {
         if (connectionState.isConnecting && connectionState.activePoint.comp !== comp) {
           point.classList.add("valid-target");
@@ -1147,8 +1436,12 @@
       canvas.appendChild(tempLine);
       connectionState.tempLine = tempLine;
 
-      document.addEventListener("mousemove", onConnectionMove);
-      document.addEventListener("mouseup", onConnectionUp);
+      // For both mouse and touch
+      const moveEvent = isTouchDevice ? "touchmove" : "mousemove";
+      const upEvent = isTouchDevice ? "touchend" : "mouseup";
+      
+      document.addEventListener(moveEvent, onConnectionMove);
+      document.addEventListener(upEvent, onConnectionUp);
 
       statusEl.innerHTML = 'Status: <strong>Drag to another component to connect.</strong>';
       e.preventDefault();
@@ -1160,10 +1453,20 @@
       const canvasRect = canvas.getBoundingClientRect();
       const pointRect = connectionState.activePoint.point.getBoundingClientRect();
 
+      let clientX, clientY;
+      
+      if (isTouchDevice && e.touches) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
       const startX = pointRect.left + pointRect.width / 2 - canvasRect.left;
       const startY = pointRect.top + pointRect.height / 2 - canvasRect.top;
-      const endX = e.clientX - canvasRect.left;
-      const endY = e.clientY - canvasRect.top;
+      const endX = clientX - canvasRect.left;
+      const endY = clientY - canvasRect.top;
 
       const dx = endX - startX;
       const dy = endY - startY;
@@ -1176,7 +1479,7 @@
       connectionState.tempLine.style.transform = `rotate(${angle}deg)`;
     }
 
-    function onConnectionUp() {
+    function onConnectionUp(e) {
       if (!connectionState.isConnecting) return;
 
       if (hoveredPoint && connectionState.activePoint) {
@@ -1212,8 +1515,11 @@
       connectionState.isConnecting = false;
       hoveredPoint = null;
 
+      // Remove both mouse and touch event listeners
       document.removeEventListener("mousemove", onConnectionMove);
       document.removeEventListener("mouseup", onConnectionUp);
+      document.removeEventListener("touchmove", onConnectionMove);
+      document.removeEventListener("touchend", onConnectionUp);
 
       statusEl.innerHTML = 'Status: <strong>Connection completed.</strong>';
     }
@@ -1279,7 +1585,6 @@ canvas.addEventListener("click", e => {
 
   statusEl.innerHTML = `Status: <strong>Disconnected joint ${terminal} on component ${compId}</strong>`;
 });
-
 
     /* --------- Simulation button --------- */
 
@@ -1748,6 +2053,31 @@ canvas.addEventListener("click", e => {
         document.addEventListener("mousemove", onMouseMove);
         document.addEventListener("mouseup", onMouseUpDrag);
       });
+
+      // Touch support for dragging
+      if (isTouchDevice) {
+        comp.addEventListener("touchstart", (e) => {
+          if (e.target.classList.contains("connection-point")) return;
+
+          e.preventDefault();
+          const rect = comp.getBoundingClientRect();
+          const canvasRect = canvas.getBoundingClientRect();
+          const touch = e.touches[0];
+
+          dragState = {
+            comp: comp,
+            offsetX: touch.clientX - rect.left,
+            offsetY: touch.clientY - rect.top,
+            canvasRect: canvasRect
+          };
+
+          clearSelection();
+          comp.classList.add("component-selected");
+
+          document.addEventListener("touchmove", onTouchMove);
+          document.addEventListener("touchend", onTouchUpDrag);
+        });
+      }
     }
 
     function onMouseMove(e) {
@@ -1757,6 +2087,27 @@ canvas.addEventListener("click", e => {
 
       let x = e.clientX - canvasRect.left - offsetX;
       let y = e.clientY - canvasRect.top - offsetY;
+
+      const maxX = canvasRect.width - comp.offsetWidth;
+      const maxY = canvasRect.height - comp.offsetHeight;
+
+      x = Math.max(0, Math.min(maxX, x));
+      y = Math.max(0, Math.min(maxY, y));
+
+      comp.style.left = x + "px";
+      comp.style.top = y + "px";
+
+      updateConnections(comp);
+    }
+
+    function onTouchMove(e) {
+      if (!dragState) return;
+
+      const { comp, offsetX, offsetY, canvasRect } = dragState;
+      const touch = e.touches[0];
+
+      let x = touch.clientX - canvasRect.left - offsetX;
+      let y = touch.clientY - canvasRect.top - offsetY;
 
       const maxX = canvasRect.width - comp.offsetWidth;
       const maxY = canvasRect.height - comp.offsetHeight;
@@ -1835,6 +2186,38 @@ canvas.addEventListener("click", e => {
       dragState = null;
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUpDrag);
+
+      statusEl.innerHTML = 'Status: <strong>Component moved.</strong>';
+    }
+
+    function onTouchUpDrag() {
+      if (!dragState) return;
+
+      const { comp } = dragState;
+
+      const canvasRect = canvas.getBoundingClientRect();
+      const compRect = comp.getBoundingClientRect();
+
+      let x = compRect.left - canvasRect.left;
+      let y = compRect.top - canvasRect.top;
+
+      x = Math.round(x / GRID_SIZE) * GRID_SIZE;
+      y = Math.round(y / GRID_SIZE) * GRID_SIZE;
+
+      const maxX = canvasRect.width - comp.offsetWidth;
+      const maxY = canvasRect.height - comp.offsetHeight;
+
+      x = Math.max(0, Math.min(maxX, x));
+      y = Math.max(0, Math.min(maxY, y));
+
+      comp.style.left = x + "px";
+      comp.style.top = y + "px";
+
+      updateConnections(comp);
+
+      dragState = null;
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchUpDrag);
 
       statusEl.innerHTML = 'Status: <strong>Component moved.</strong>';
     }
