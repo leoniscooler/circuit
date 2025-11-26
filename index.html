@@ -103,6 +103,11 @@
       border: 1px solid #f44336;
     }
 
+    .icon-bulb {
+      background: #fff9c4;
+      border: 1px solid #fbc02d;
+    }
+
     .tool-label-main {
       font-size: 14px;
       font-weight: 600;
@@ -219,6 +224,36 @@
     .component-resistor .component-inner {
       background: #e0f3ff;
       border-color: #4a90e2;
+    }
+
+    .component-bulb .component-inner {
+      background: #f5f5f5;
+      border-color: #bdbdbd;
+      transition: background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+    }
+
+    .component-bulb.off .component-inner {
+      background: #eeeeee;
+      color: #999;
+      box-shadow: none;
+    }
+
+    .component-bulb.dim .component-inner {
+      background: #fff9c4;
+      color: #666;
+      box-shadow: 0 0 6px rgba(255, 235, 59, 0.5);
+    }
+
+    .component-bulb.medium .component-inner {
+      background: #ffe082;
+      color: #555;
+      box-shadow: 0 0 10px rgba(255, 193, 7, 0.8);
+    }
+
+    .component-bulb.bright .component-inner {
+      background: #ffd54f;
+      color: #444;
+      box-shadow: 0 0 16px rgba(255, 160, 0, 1);
     }
 
     .component-label {
@@ -524,11 +559,19 @@
           </div>
         </div>
 
+        <div class="tool-item" draggable="true" data-component="bulb">
+          <div class="tool-icon icon-bulb">💡</div>
+          <div>
+            <div class="tool-label-main">Light Bulb</div>
+            <div class="tool-label-sub">Brightness = power</div>
+          </div>
+        </div>
+
         <div class="tool-item" id="eraserTool" data-tool="eraser">
           <div class="tool-icon icon-eraser">✕</div>
           <div>
             <div class="tool-label-main">Eraser</div>
-            <div class="tool-label-sub">Remove components</div>
+            <div class="tool-label-sub">Remove items</div>
           </div>
         </div>
       </div>
@@ -543,8 +586,9 @@
         • Drag placed parts to move them around.<br />
         • <strong> Double-click a battery or resistor to configure its properties. </strong> <br />
         • Click and drag from a connection point to connect components.<br />
-        • Select the eraser tool and click on components to delete them.<br />
-        • Click the eraser tool again to unselect it.<br />
+        • Drag a <strong>light bulb</strong> on top of a resistor to “attach” it.<br />
+        • Brightness of the bulb shows <strong>power at that resistor</strong>.<br />
+        • Select the eraser tool and click on items to delete them.<br />
         • Click "Run Simulation" to calculate circuit physics.
       </div>
     </div>
@@ -576,34 +620,32 @@
       isConnecting: false
     };
     let hoveredPoint = null;
-    let activeTool = null; // 'battery', 'resistor', or 'eraser'
+    let activeTool = null; // 'battery', 'resistor', 'bulb', or 'eraser'
 
-    // --- Tool Selection ---
+    let componentIdCounter = 1;
+    let connectionIdCounter = 1;
+    const connections = [];
+
+    // --- Tool Selection (eraser) ---
 
     toolboxItems.forEach(item => {
       item.addEventListener("click", (e) => {
-        // Skip if it's a draggable component (those use drag & drop)
-        if (item.draggable) return;
-        
+        // Only eraser uses click-to-toggle
         const tool = item.dataset.tool;
-        
-        // Toggle eraser tool - if already active, deactivate it
-        if (tool === "eraser") {
-          if (activeTool === "eraser") {
-            // Deactivate eraser
-            item.classList.remove("eraser-active");
-            canvas.classList.remove("cursor-eraser");
-            activeTool = null;
-            workspaceHint.textContent = "Tip: drag components from the toolbox to begin";
-            statusEl.innerHTML = 'Status: <strong>Eraser tool deactivated.</strong>';
-          } else {
-            // Activate eraser
-            item.classList.add("eraser-active");
-            canvas.classList.add("cursor-eraser");
-            activeTool = "eraser";
-            workspaceHint.textContent = "Tip: click on components or connections to delete them";
-            statusEl.innerHTML = 'Status: <strong>Eraser tool selected. Click on components to delete them.</strong>';
-          }
+        if (tool !== "eraser") return;
+
+        if (activeTool === "eraser") {
+          item.classList.remove("eraser-active");
+          canvas.classList.remove("cursor-eraser");
+          activeTool = null;
+          workspaceHint.textContent = "Tip: drag components from the toolbox to begin";
+          statusEl.innerHTML = 'Status: <strong>Eraser tool deactivated.</strong>';
+        } else {
+          item.classList.add("eraser-active");
+          canvas.classList.add("cursor-eraser");
+          activeTool = "eraser";
+          workspaceHint.textContent = "Tip: click on components or connections to delete them";
+          statusEl.innerHTML = 'Status: <strong>Eraser tool selected. Click on components to delete them.</strong>';
         }
       });
     });
@@ -614,7 +656,6 @@
       item.addEventListener("dragstart", (e) => {
         const type = item.dataset.component;
         if (!type) return; // Skip if not a component (like eraser)
-        
         e.dataTransfer.setData("componentType", type);
         e.dataTransfer.effectAllowed = "copy";
         statusEl.innerHTML = 'Status: <strong>Dragging a ' + type + '…</strong>';
@@ -647,55 +688,45 @@
 
     canvas.addEventListener("click", (e) => {
       if (activeTool !== "eraser") return;
-      
-      // Find if we clicked on a component
+
       let target = e.target;
-      
-      // If we clicked on a connection point, get its parent component
+
       if (target.classList.contains("connection-point")) {
         target = target.parentElement;
       }
-      
-      // If we clicked on a component inner element, get the component
+
       if (target.classList.contains("component-inner")) {
         target = target.parentElement;
       }
-      
-      // If we clicked on a component, delete it
+
       if (target.classList.contains("component")) {
         deleteComponent(target);
         return;
       }
-      
-      // If we clicked on a connection line, delete it
+
       if (target.classList.contains("connection-line")) {
         deleteConnection(target);
         return;
       }
     });
 
-    // Add hover effects for eraser tool
     canvas.addEventListener("mouseover", (e) => {
       if (activeTool !== "eraser") return;
-      
+
       let target = e.target;
-      
-      // If we're over a connection point, get its parent component
+
       if (target.classList.contains("connection-point")) {
         target = target.parentElement;
       }
-      
-      // If we're over a component inner element, get the component
+
       if (target.classList.contains("component-inner")) {
         target = target.parentElement;
       }
-      
-      // Add hover effect to components
+
       if (target.classList.contains("component")) {
         target.classList.add("component-eraser-hover");
       }
-      
-      // Add hover effect to connection lines
+
       if (target.classList.contains("connection-line")) {
         target.classList.add("eraser-hover");
       }
@@ -703,25 +734,21 @@
 
     canvas.addEventListener("mouseout", (e) => {
       if (activeTool !== "eraser") return;
-      
+
       let target = e.target;
-      
-      // If we're leaving a connection point, get its parent component
+
       if (target.classList.contains("connection-point")) {
         target = target.parentElement;
       }
-      
-      // If we're leaving a component inner element, get the component
+
       if (target.classList.contains("component-inner")) {
         target = target.parentElement;
       }
-      
-      // Remove hover effect from components
+
       if (target.classList.contains("component")) {
         target.classList.remove("component-eraser-hover");
       }
-      
-      // Remove hover effect from connection lines
+
       if (target.classList.contains("connection-line")) {
         target.classList.remove("eraser-hover");
       }
@@ -729,53 +756,37 @@
 
     function deleteComponent(component) {
       const componentId = component.dataset.id;
-      
-      // Remove all connections associated with this component
-      const connectionsToRemove = connections.filter(conn => 
+
+      const connectionsToRemove = connections.filter(conn =>
         conn.comp1 === componentId || conn.comp2 === componentId
       );
-      
+
       connectionsToRemove.forEach(conn => {
-        // Remove the connection line from canvas
         if (conn.line && conn.line.parentElement) {
           conn.line.parentElement.removeChild(conn.line);
         }
-        
-        // Remove from connections array
         const index = connections.indexOf(conn);
-        if (index > -1) {
-          connections.splice(index, 1);
-        }
+        if (index > -1) connections.splice(index, 1);
       });
-      
-      // Remove the component
+
       component.remove();
-      
+
       statusEl.innerHTML = 'Status: <strong>Component deleted.</strong>';
     }
 
     function deleteConnection(connectionLine) {
       const connectionId = connectionLine.dataset.id;
-      
-      // Find the connection in our array
+
       const connectionIndex = connections.findIndex(conn => conn.id === connectionId);
-      
+
       if (connectionIndex > -1) {
-        // Remove the connection line from canvas
         connectionLine.remove();
-        
-        // Remove from connections array
         connections.splice(connectionIndex, 1);
-        
         statusEl.innerHTML = 'Status: <strong>Connection deleted.</strong>';
       }
     }
 
     // --- Create components ---
-
-    let componentIdCounter = 1;
-    let connectionIdCounter = 1;
-    const connections = [];
 
     function createComponent(type, x, y) {
       const comp = document.createElement("div");
@@ -785,11 +796,10 @@
       comp.style.left = (x - 20) + "px";
       comp.style.top = (y - 10) + "px";
 
-      // Set default properties
       if (type === "battery") {
-        comp.dataset.voltage = "9"; // Default voltage
+        comp.dataset.voltage = "9";
       } else if (type === "resistor") {
-        comp.dataset.resistance = "100"; // Default resistance in ohms
+        comp.dataset.resistance = "100";
       }
 
       const inner = document.createElement("div");
@@ -802,11 +812,11 @@
         const label = document.createElement("span");
         label.classList.add("component-label");
         label.textContent = comp.dataset.voltage + "V";
-        
+
         const property = document.createElement("div");
         property.classList.add("component-property");
         property.textContent = comp.dataset.voltage + "V Battery";
-        
+
         inner.appendChild(symbol);
         inner.appendChild(label);
         inner.appendChild(property);
@@ -817,44 +827,62 @@
         const label = document.createElement("span");
         label.classList.add("component-label");
         label.textContent = "R";
-        
+
         const resistanceDisplay = document.createElement("span");
         resistanceDisplay.classList.add("resistance-display");
         resistanceDisplay.textContent = formatResistance(comp.dataset.resistance);
-        
+
         const property = document.createElement("div");
         property.classList.add("component-property");
         property.textContent = "Resistor";
-        
+
         inner.appendChild(symbol);
         inner.appendChild(label);
         inner.appendChild(resistanceDisplay);
         inner.appendChild(property);
+      } else if (type === "bulb") {
+        comp.dataset.brightness = "0";
+        const symbol = document.createElement("span");
+        symbol.classList.add("component-symbol");
+        symbol.textContent = "💡";
+        const label = document.createElement("span");
+        label.classList.add("component-label");
+        label.textContent = "Bulb";
+
+        const property = document.createElement("div");
+        property.classList.add("component-property");
+        property.textContent = "Bulb (off)";
+
+        inner.appendChild(symbol);
+        inner.appendChild(label);
+        inner.appendChild(property);
+        comp.classList.add("off");
       }
 
       comp.appendChild(inner);
       canvas.appendChild(comp);
 
-      // Add connection points
-      addConnectionPoints(comp);
+      if (type === "battery" || type === "resistor") {
+        addConnectionPoints(comp);
+      }
+
       makeComponentDraggable(comp);
 
-      // Add double-click for configuration
       comp.addEventListener("dblclick", (e) => {
         if (e.target.classList.contains("connection-point")) return;
-        openConfigurationPanel(comp);
+        if (type === "battery" || type === "resistor") {
+          openConfigurationPanel(comp);
+        }
       });
 
       return comp;
     }
 
     function openConfigurationPanel(comp) {
-      // Create overlay
       const overlay = document.createElement("div");
       overlay.classList.add("overlay");
       canvas.appendChild(overlay);
 
-      // Create configuration panel
       const panel = document.createElement("div");
       panel.classList.add("config-panel");
 
@@ -896,33 +924,31 @@
 
       canvas.appendChild(panel);
 
-      // Sync range and number inputs
       if (type === "battery") {
         const voltageInput = panel.querySelector("#voltage");
         const voltageRange = panel.querySelector("#voltageRange");
-        
+
         voltageInput.addEventListener("input", () => {
           voltageRange.value = voltageInput.value;
         });
-        
+
         voltageRange.addEventListener("input", () => {
           voltageInput.value = voltageRange.value;
         });
       } else if (type === "resistor") {
         const resistanceInput = panel.querySelector("#resistance");
         const resistanceRange = panel.querySelector("#resistanceRange");
-        
+
         resistanceInput.addEventListener("input", () => {
           const value = Math.min(10000, resistanceInput.value);
           resistanceRange.value = value;
         });
-        
+
         resistanceRange.addEventListener("input", () => {
           resistanceInput.value = resistanceRange.value;
         });
       }
 
-      // Save button handler
       panel.querySelector(".save-btn").addEventListener("click", () => {
         if (type === "battery") {
           const voltage = panel.querySelector("#voltage").value;
@@ -935,20 +961,17 @@
           updateComponentDisplay(comp);
           statusEl.innerHTML = `Status: <strong>Resistance set to ${resistance}Ω.</strong>`;
         }
-        
-        // Close panel
+
         panel.remove();
         overlay.remove();
       });
 
-      // Cancel button handler
       panel.querySelector(".cancel-btn").addEventListener("click", () => {
         panel.remove();
         overlay.remove();
         statusEl.innerHTML = 'Status: <strong>Configuration cancelled.</strong>';
       });
 
-      // Close on overlay click
       overlay.addEventListener("click", () => {
         panel.remove();
         overlay.remove();
@@ -959,7 +982,7 @@
     function updateComponentDisplay(comp) {
       const type = comp.dataset.type;
       const inner = comp.querySelector(".component-inner");
-      
+
       if (type === "battery") {
         const label = inner.querySelector(".component-label");
         const property = inner.querySelector(".component-property");
@@ -984,17 +1007,14 @@
 
     function addConnectionPoints(comp) {
       const type = comp.dataset.type;
-      
-      // Clear any existing connection points
+
       const existingPoints = comp.querySelectorAll(".connection-point");
       existingPoints.forEach(point => point.remove());
-      
+
       if (type === "battery") {
-        // Battery has positive and negative terminals
         createConnectionPoint(comp, 0, 50, "positive");
         createConnectionPoint(comp, 100, 50, "negative");
       } else if (type === "resistor") {
-        // Resistor has two connection points
         createConnectionPoint(comp, 0, 50, "end1");
         createConnectionPoint(comp, 100, 50, "end2");
       }
@@ -1007,80 +1027,62 @@
       point.dataset.componentId = comp.dataset.id;
       point.style.left = `${xPercent}%`;
       point.style.top = `${yPercent}%`;
-      
-      // Mouse down to start connection
+
       point.addEventListener("mousedown", (e) => {
         e.stopPropagation();
         startConnection(comp, point, e);
       });
-      
-      // Mouse enter to highlight as potential target
+
       point.addEventListener("mouseenter", (e) => {
         if (connectionState.isConnecting && connectionState.activePoint.comp !== comp) {
           point.classList.add("valid-target");
           hoveredPoint = point;
         }
       });
-      
-      // Mouse leave to remove highlight
+
       point.addEventListener("mouseleave", (e) => {
         point.classList.remove("valid-target");
         if (hoveredPoint === point) {
           hoveredPoint = null;
         }
       });
-      
+
       comp.appendChild(point);
     }
 
     function startConnection(comp, point, e) {
-      // Set active connection point
       connectionState.activePoint = { comp, point };
       connectionState.isConnecting = true;
       point.classList.add("active");
-      
-      // Create temporary connection line
+
       const tempLine = document.createElement("div");
       tempLine.classList.add("temp-connection-line");
       canvas.appendChild(tempLine);
       connectionState.tempLine = tempLine;
-      
-      // Get starting position
-      const canvasRect = canvas.getBoundingClientRect();
-      const pointRect = point.getBoundingClientRect();
-      const startX = pointRect.left + pointRect.width/2 - canvasRect.left;
-      const startY = pointRect.top + pointRect.height/2 - canvasRect.top;
-      
-      // Update line on mouse move
+
       document.addEventListener("mousemove", onConnectionMove);
-      
-      // Finish connection on mouse up
       document.addEventListener("mouseup", onConnectionUp);
-      
+
       statusEl.innerHTML = 'Status: <strong>Drag to another component to connect.</strong>';
-      
-      // Prevent default to avoid component drag
       e.preventDefault();
     }
 
     function onConnectionMove(e) {
       if (!connectionState.isConnecting || !connectionState.tempLine) return;
-      
+
       const canvasRect = canvas.getBoundingClientRect();
       const pointRect = connectionState.activePoint.point.getBoundingClientRect();
-      
-      const startX = pointRect.left + pointRect.width/2 - canvasRect.left;
-      const startY = pointRect.top + pointRect.height/2 - canvasRect.top;
+
+      const startX = pointRect.left + pointRect.width / 2 - canvasRect.left;
+      const startY = pointRect.top + pointRect.height / 2 - canvasRect.top;
       const endX = e.clientX - canvasRect.left;
       const endY = e.clientY - canvasRect.top;
-      
-      // Calculate line length and angle
+
       const dx = endX - startX;
       const dy = endY - startY;
       const length = Math.sqrt(dx * dx + dy * dy);
       const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      
-      // Update temporary line
+
       connectionState.tempLine.style.width = length + "px";
       connectionState.tempLine.style.left = startX + "px";
       connectionState.tempLine.style.top = startY + "px";
@@ -1089,21 +1091,19 @@
 
     function onConnectionUp(e) {
       if (!connectionState.isConnecting) return;
-      
-      // If we're hovering over a valid connection point, create the connection
+
       if (hoveredPoint && connectionState.activePoint) {
         const targetComp = document.querySelector(`[data-id="${hoveredPoint.dataset.componentId}"]`);
         if (targetComp && connectionState.activePoint.comp !== targetComp) {
           createConnection(
-            connectionState.activePoint.comp, 
-            connectionState.activePoint.point, 
-            targetComp, 
+            connectionState.activePoint.comp,
+            connectionState.activePoint.point,
+            targetComp,
             hoveredPoint
           );
         }
       }
-      
-      // Clean up connection state
+
       finishConnection();
     }
 
@@ -1111,62 +1111,54 @@
       if (connectionState.activePoint) {
         connectionState.activePoint.point.classList.remove("active");
       }
-      
+
       if (connectionState.tempLine) {
         connectionState.tempLine.remove();
         connectionState.tempLine = null;
       }
-      
-      // Remove valid-target class from all points
+
       document.querySelectorAll(".connection-point.valid-target").forEach(point => {
         point.classList.remove("valid-target");
       });
-      
+
       connectionState.activePoint = null;
       connectionState.isConnecting = false;
       hoveredPoint = null;
-      
+
       document.removeEventListener("mousemove", onConnectionMove);
       document.removeEventListener("mouseup", onConnectionUp);
-      
+
       statusEl.innerHTML = 'Status: <strong>Connection completed.</strong>';
     }
 
     function createConnection(comp1, point1, comp2, point2) {
       const id = "conn" + connectionIdCounter++;
-      
-      // Calculate positions
-      const comp1Rect = comp1.getBoundingClientRect();
-      const comp2Rect = comp2.getBoundingClientRect();
+
       const canvasRect = canvas.getBoundingClientRect();
-      
       const point1Rect = point1.getBoundingClientRect();
       const point2Rect = point2.getBoundingClientRect();
-      
-      const x1 = point1Rect.left + point1Rect.width/2 - canvasRect.left;
-      const y1 = point1Rect.top + point1Rect.height/2 - canvasRect.top;
-      const x2 = point2Rect.left + point2Rect.width/2 - canvasRect.left;
-      const y2 = point2Rect.top + point2Rect.height/2 - canvasRect.top;
-      
-      // Create connection line
+
+      const x1 = point1Rect.left + point1Rect.width / 2 - canvasRect.left;
+      const y1 = point1Rect.top + point1Rect.height / 2 - canvasRect.top;
+      const x2 = point2Rect.left + point2Rect.width / 2 - canvasRect.left;
+      const y2 = point2Rect.top + point2Rect.height / 2 - canvasRect.top;
+
       const line = document.createElement("div");
       line.classList.add("connection-line");
       line.dataset.id = id;
-      
-      // Calculate line length and angle
+
       const dx = x2 - x1;
       const dy = y2 - y1;
       const length = Math.sqrt(dx * dx + dy * dy);
       const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      
+
       line.style.width = length + "px";
       line.style.left = x1 + "px";
       line.style.top = y1 + "px";
       line.style.transform = `rotate(${angle}deg)`;
-      
+
       canvas.appendChild(line);
-      
-      // Store connection data
+
       connections.push({
         id,
         comp1: comp1.dataset.id,
@@ -1177,10 +1169,17 @@
       });
     }
 
-    // --- Run Simulation ---
+    // --- Physics / Simulation ---
 
     runBtn.addEventListener("click", () => {
       const result = calculateCircuitPhysics();
+      if (!result.error) {
+        updateBulbs(result);
+      } else {
+        // turn all bulbs off if there is an error
+        const bulbs = document.querySelectorAll(".component-bulb");
+        bulbs.forEach(bulb => setBulbBrightness(bulb, 0, null));
+      }
       showPhysicsResults(result);
     });
 
@@ -1188,53 +1187,57 @@
       const components = Array.from(document.querySelectorAll('.component'));
       const batteries = components.filter(c => c.dataset.type === 'battery');
       const resistors = components.filter(c => c.dataset.type === 'resistor');
-      
-      // Check for valid circuit
+
       if (batteries.length === 0) {
         return {
           error: "No battery found in the circuit. Add a battery to power the circuit."
         };
       }
-      
+
       if (batteries.length > 1) {
         return {
           error: "Multiple batteries detected. This simulation only supports circuits with one battery."
         };
       }
-      
+
       if (resistors.length === 0) {
         return {
           error: "No resistors found in the circuit. Add at least one resistor."
         };
       }
-      
+
       if (connections.length === 0) {
         return {
           error: "No connections found. Connect components to form a complete circuit."
         };
       }
-      
-      // Get battery voltage
+
       const batteryVoltage = parseFloat(batteries[0].dataset.voltage);
-      
-      // Calculate total resistance
+
       let totalResistance = 0;
-      
-      // Simple series circuit calculation (for demo purposes)
-      // In a real implementation, you would analyze the circuit topology
+      const resistorData = [];
       resistors.forEach(resistor => {
-        totalResistance += parseFloat(resistor.dataset.resistance);
+        const R = parseFloat(resistor.dataset.resistance);
+        totalResistance += R;
+        resistorData.push({
+          id: resistor.dataset.id,
+          comp: resistor,
+          resistance: R,
+          power: 0
+        });
       });
-      
-      // Calculate current using Ohm's Law: I = V / R
+
       const current = batteryVoltage / totalResistance;
-      
-      // Calculate power: P = V * I
       const power = batteryVoltage * current;
-      
-      // Determine circuit type (simplified)
-      const circuitType = resistors.length > 1 ? "Series Circuit" : "Simple Circuit";
-      
+
+      let maxPower = 0;
+      resistorData.forEach(r => {
+        r.power = current * current * r.resistance;
+        if (r.power > maxPower) maxPower = r.power;
+      });
+
+      const circuitType = resistors.length > 1 ? "Series Circuit (simplified)" : "Simple Circuit";
+
       return {
         batteryVoltage,
         totalResistance,
@@ -1242,22 +1245,22 @@
         power,
         circuitType,
         resistorCount: resistors.length,
+        resistorData,
+        maxPower,
         error: null
       };
     }
 
     function showPhysicsResults(result) {
-      // Create overlay
       const overlay = document.createElement("div");
       overlay.classList.add("overlay");
       canvas.appendChild(overlay);
 
-      // Create physics panel
       const panel = document.createElement("div");
       panel.classList.add("physics-panel");
 
       let content = '';
-      
+
       if (result.error) {
         content = `
           <div class="error-message">
@@ -1286,7 +1289,7 @@
               <span class="physics-value">${result.current.toFixed(4)} A</span>
             </div>
             <div class="physics-result-item">
-              <span class="physics-label">Power:</span>
+              <span class="physics-label">Power (battery):</span>
               <span class="physics-value">${result.power.toFixed(4)} W</span>
             </div>
             <div class="physics-result-item">
@@ -1306,30 +1309,100 @@
 
       canvas.appendChild(panel);
 
-      // Close button handler
       panel.querySelector(".cancel-btn").addEventListener("click", () => {
         panel.remove();
         overlay.remove();
         statusEl.innerHTML = 'Status: <strong>Simulation closed.</strong>';
       });
 
-      // Close on overlay click
       overlay.addEventListener("click", () => {
         panel.remove();
         overlay.remove();
         statusEl.innerHTML = 'Status: <strong>Simulation closed.</strong>';
       });
-      
+
       if (!result.error) {
-        statusEl.innerHTML = `Status: <strong>Circuit simulation completed. Total resistance: ${formatResistance(result.totalResistance)}, Current: ${result.current.toFixed(4)}A</strong>`;
+        statusEl.innerHTML = `Status: <strong>Circuit simulation done. Total resistance: ${formatResistance(result.totalResistance)}, Current: ${result.current.toFixed(4)}A</strong>`;
       }
     }
 
-    // --- Dragging placed components (custom mouse drag) ---
+    // --- Bulb brightness mapping ---
+
+    function getComponentCenter(comp) {
+      const canvasRect = canvas.getBoundingClientRect();
+      const rect = comp.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2 - canvasRect.left;
+      const cy = rect.top + rect.height / 2 - canvasRect.top;
+      return { x: cx, y: cy };
+    }
+
+    function updateBulbs(result) {
+      const bulbs = document.querySelectorAll(".component-bulb");
+      if (bulbs.length === 0) return;
+
+      const resistorData = result.resistorData || [];
+      const maxPower = result.maxPower || 0;
+
+      bulbs.forEach(bulb => {
+        let attachedResistor = null;
+        let bestDist = Infinity;
+
+        const bulbCenter = getComponentCenter(bulb);
+
+        resistorData.forEach(r => {
+          const rc = getComponentCenter(r.comp);
+          const dx = rc.x - bulbCenter.x;
+          const dy = rc.y - bulbCenter.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < bestDist) {
+            bestDist = d;
+            attachedResistor = r;
+          }
+        });
+
+        const ATTACH_DISTANCE = 80; // pixels
+
+        if (!attachedResistor || bestDist > ATTACH_DISTANCE || maxPower === 0) {
+          setBulbBrightness(bulb, 0, null);
+        } else {
+          const brightness = attachedResistor.power / maxPower;
+          setBulbBrightness(bulb, brightness, attachedResistor.power);
+        }
+      });
+    }
+
+    function setBulbBrightness(bulb, fraction, power) {
+      const inner = bulb.querySelector(".component-inner");
+      const property = bulb.querySelector(".component-property");
+
+      bulb.classList.remove("off", "dim", "medium", "bright");
+
+      let levelClass = "off";
+      let label = "Bulb (off)";
+
+      if (fraction <= 0.05 || power === null) {
+        levelClass = "off";
+        label = power === null ? "Bulb (not attached)" : "Bulb (off)";
+      } else if (fraction <= 0.3) {
+        levelClass = "dim";
+        label = power !== null ? "Bulb (dim) ~ " + power.toFixed(3) + "W" : "Bulb (dim)";
+      } else if (fraction <= 0.7) {
+        levelClass = "medium";
+        label = power !== null ? "Bulb (medium) ~ " + power.toFixed(3) + "W" : "Bulb (medium)";
+      } else {
+        levelClass = "bright";
+        label = power !== null ? "Bulb (bright) ~ " + power.toFixed(3) + "W" : "Bulb (bright)";
+      }
+
+      bulb.classList.add(levelClass);
+      if (property) property.textContent = label;
+      bulb.dataset.brightness = fraction.toFixed(3);
+    }
+
+    // --- Dragging placed components ---
 
     function makeComponentDraggable(comp) {
       comp.addEventListener("mousedown", (e) => {
-        // only left click and not on a connection point
         if (e.button !== 0 || e.target.classList.contains("connection-point")) return;
 
         e.preventDefault();
@@ -1359,7 +1432,6 @@
       let x = e.clientX - canvasRect.left - offsetX;
       let y = e.clientY - canvasRect.top - offsetY;
 
-      // keep inside canvas
       const maxX = canvasRect.width - comp.offsetWidth;
       const maxY = canvasRect.height - comp.offsetHeight;
 
@@ -1368,46 +1440,39 @@
 
       comp.style.left = x + "px";
       comp.style.top = y + "px";
-      
-      // Update any connections for this component
+
       updateConnections(comp);
     }
 
     function updateConnections(comp) {
       const compId = comp.dataset.id;
-      
+
       connections.forEach(conn => {
         if (conn.comp1 === compId || conn.comp2 === compId) {
-          // Find the components and points
           const comp1 = document.querySelector(`[data-id="${conn.comp1}"]`);
           const comp2 = document.querySelector(`[data-id="${conn.comp2}"]`);
-          
+
           if (!comp1 || !comp2) return;
-          
+
           const point1 = comp1.querySelector(`[data-type="${conn.point1}"]`);
           const point2 = comp2.querySelector(`[data-type="${conn.point2}"]`);
-          
+
           if (!point1 || !point2) return;
-          
-          // Recalculate line position
-          const comp1Rect = comp1.getBoundingClientRect();
-          const comp2Rect = comp2.getBoundingClientRect();
+
           const canvasRect = canvas.getBoundingClientRect();
-          
           const point1Rect = point1.getBoundingClientRect();
           const point2Rect = point2.getBoundingClientRect();
-          
-          const x1 = point1Rect.left + point1Rect.width/2 - canvasRect.left;
-          const y1 = point1Rect.top + point1Rect.height/2 - canvasRect.top;
-          const x2 = point2Rect.left + point2Rect.width/2 - canvasRect.left;
-          const y2 = point2Rect.top + point2Rect.height/2 - canvasRect.top;
-          
-          // Update line
+
+          const x1 = point1Rect.left + point1Rect.width / 2 - canvasRect.left;
+          const y1 = point1Rect.top + point1Rect.height / 2 - canvasRect.top;
+          const x2 = point2Rect.left + point2Rect.width / 2 - canvasRect.left;
+          const y2 = point2Rect.top + point2Rect.height / 2 - canvasRect.top;
+
           const dx = x2 - x1;
           const dy = y2 - y1;
           const length = Math.sqrt(dx * dx + dy * dy);
           const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-          
+
           conn.line.style.width = length + "px";
           conn.line.style.left = x1 + "px";
           conn.line.style.top = y1 + "px";
@@ -1421,7 +1486,6 @@
 
       const { comp } = dragState;
 
-      // snap to grid on mouse up
       const canvasRect = canvas.getBoundingClientRect();
       const compRect = comp.getBoundingClientRect();
 
@@ -1439,8 +1503,7 @@
 
       comp.style.left = x + "px";
       comp.style.top = y + "px";
-      
-      // Update connections after final position
+
       updateConnections(comp);
 
       dragState = null;
