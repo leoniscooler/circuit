@@ -213,7 +213,7 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      pointer-events: none; /* so dragging works on the parent */
+      pointer-events: none;
     }
 
     .component-battery .component-inner {
@@ -290,7 +290,6 @@
       color: #333;
     }
 
-    /* Connection points */
     .connection-point {
       position: absolute;
       width: 12px;
@@ -319,7 +318,6 @@
       transform: translate(-50%, -50%) scale(1.3);
     }
 
-    /* Connection lines */
     .connection-line {
       position: absolute;
       background: #4a90e2;
@@ -349,7 +347,6 @@
       box-shadow: 0 0 3px rgba(255, 204, 0, 0.5);
     }
 
-    /* Configuration Panel */
     .config-panel {
       position: absolute;
       top: 50%;
@@ -456,7 +453,6 @@
       margin-left: 4px;
     }
 
-    /* Physics Results Panel */
     .physics-panel {
       position: absolute;
       top: 50%;
@@ -507,13 +503,6 @@
       font-size: 14px;
       font-weight: 700;
       color: #4a90e2;
-    }
-
-    .circuit-type {
-      font-size: 12px;
-      color: #666;
-      font-style: italic;
-      margin-top: 4px;
     }
 
     .error-message {
@@ -584,12 +573,12 @@
         <strong>How to use:</strong><br />
         • Drag a part from the left onto the grid.<br />
         • Drag placed parts to move them around.<br />
-        • <strong> Double-click a battery or resistor to configure its properties. </strong> <br />
+        <strong>• Double-click a battery or resistor to set its value.</strong><br />
         • Click and drag from a connection point to connect components.<br />
-        • Drag a <strong>light bulb</strong> on top of a resistor to “attach” it.<br />
-        • Brightness of the bulb shows <strong>power at that resistor</strong>.<br />
+        <strong>• Drag a light bulb on top of a resistor to “attach” it.</strong><br />
+        • Bulb brightness shows power in that resistor.<br />
         • Select the eraser tool and click on items to delete them.<br />
-        • Click "Run Simulation" to calculate circuit physics.
+        • Click "Run Simulation" to analyze the circuit.
       </div>
     </div>
   </div>
@@ -613,24 +602,74 @@
     const workspaceHint = document.getElementById("workspaceHint");
 
     const GRID_SIZE = 20;
-    let dragState = null; // for dragging placed components
+    let dragState = null;
     let connectionState = {
       activePoint: null,
       tempLine: null,
       isConnecting: false
     };
     let hoveredPoint = null;
-    let activeTool = null; // 'battery', 'resistor', 'bulb', or 'eraser'
+    let activeTool = null;
 
     let componentIdCounter = 1;
     let connectionIdCounter = 1;
     const connections = [];
 
-    // --- Tool Selection (eraser) ---
+    /* --------- Helper: Solve linear system A x = b (Gaussian elimination) --------- */
+    function solveLinearSystem(A, b) {
+      const n = A.length;
+      if (n === 0) return [];
+
+      // Build augmented matrix
+      const M = A.map((row, i) => row.slice().concat([b[i]]));
+
+      for (let col = 0; col < n; col++) {
+        // Find pivot
+        let pivotRow = col;
+        let maxAbs = Math.abs(M[col][col]);
+        for (let r = col + 1; r < n; r++) {
+          const val = Math.abs(M[r][col]);
+          if (val > maxAbs) {
+            maxAbs = val;
+            pivotRow = r;
+          }
+        }
+        if (maxAbs < 1e-12) {
+          return null; // singular
+        }
+        // Swap to top
+        if (pivotRow !== col) {
+          const tmp = M[col];
+          M[col] = M[pivotRow];
+          M[pivotRow] = tmp;
+        }
+        // Normalize pivot row
+        const pivot = M[col][col];
+        for (let c = col; c <= n; c++) {
+          M[col][c] /= pivot;
+        }
+        // Eliminate column from other rows
+        for (let r = 0; r < n; r++) {
+          if (r === col) continue;
+          const factor = M[r][col];
+          if (Math.abs(factor) < 1e-12) continue;
+          for (let c = col; c <= n; c++) {
+            M[r][c] -= factor * M[col][c];
+          }
+        }
+      }
+
+      const x = new Array(n);
+      for (let i = 0; i < n; i++) {
+        x[i] = M[i][n];
+      }
+      return x;
+    }
+
+    /* --------- Tool selection (eraser toggle) --------- */
 
     toolboxItems.forEach(item => {
-      item.addEventListener("click", (e) => {
-        // Only eraser uses click-to-toggle
+      item.addEventListener("click", () => {
         const tool = item.dataset.tool;
         if (tool !== "eraser") return;
 
@@ -650,12 +689,12 @@
       });
     });
 
-    // --- Toolbox drag source (HTML5 DnD) ---
+    /* --------- Toolbox drag source --------- */
 
     toolboxItems.forEach(item => {
       item.addEventListener("dragstart", (e) => {
         const type = item.dataset.component;
-        if (!type) return; // Skip if not a component (like eraser)
+        if (!type) return;
         e.dataTransfer.setData("componentType", type);
         e.dataTransfer.effectAllowed = "copy";
         statusEl.innerHTML = 'Status: <strong>Dragging a ' + type + '…</strong>';
@@ -663,7 +702,7 @@
     });
 
     canvas.addEventListener("dragover", (e) => {
-      e.preventDefault(); // allow drop
+      e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     });
 
@@ -676,7 +715,6 @@
       let x = e.clientX - rect.left;
       let y = e.clientY - rect.top;
 
-      // snap to grid
       x = Math.round(x / GRID_SIZE) * GRID_SIZE;
       y = Math.round(y / GRID_SIZE) * GRID_SIZE;
 
@@ -684,7 +722,7 @@
       statusEl.innerHTML = 'Status: <strong>Placed a ' + type + '.</strong>';
     });
 
-    // --- Eraser Tool Functionality ---
+    /* --------- Eraser behavior --------- */
 
     canvas.addEventListener("click", (e) => {
       if (activeTool !== "eraser") return;
@@ -694,7 +732,6 @@
       if (target.classList.contains("connection-point")) {
         target = target.parentElement;
       }
-
       if (target.classList.contains("component-inner")) {
         target = target.parentElement;
       }
@@ -703,7 +740,6 @@
         deleteComponent(target);
         return;
       }
-
       if (target.classList.contains("connection-line")) {
         deleteConnection(target);
         return;
@@ -714,11 +750,9 @@
       if (activeTool !== "eraser") return;
 
       let target = e.target;
-
       if (target.classList.contains("connection-point")) {
         target = target.parentElement;
       }
-
       if (target.classList.contains("component-inner")) {
         target = target.parentElement;
       }
@@ -726,7 +760,6 @@
       if (target.classList.contains("component")) {
         target.classList.add("component-eraser-hover");
       }
-
       if (target.classList.contains("connection-line")) {
         target.classList.add("eraser-hover");
       }
@@ -736,11 +769,9 @@
       if (activeTool !== "eraser") return;
 
       let target = e.target;
-
       if (target.classList.contains("connection-point")) {
         target = target.parentElement;
       }
-
       if (target.classList.contains("component-inner")) {
         target = target.parentElement;
       }
@@ -748,7 +779,6 @@
       if (target.classList.contains("component")) {
         target.classList.remove("component-eraser-hover");
       }
-
       if (target.classList.contains("connection-line")) {
         target.classList.remove("eraser-hover");
       }
@@ -776,17 +806,15 @@
 
     function deleteConnection(connectionLine) {
       const connectionId = connectionLine.dataset.id;
-
-      const connectionIndex = connections.findIndex(conn => conn.id === connectionId);
-
-      if (connectionIndex > -1) {
+      const idx = connections.findIndex(conn => conn.id === connectionId);
+      if (idx > -1) {
         connectionLine.remove();
-        connections.splice(connectionIndex, 1);
+        connections.splice(idx, 1);
         statusEl.innerHTML = 'Status: <strong>Connection deleted.</strong>';
       }
     }
 
-    // --- Create components ---
+    /* --------- Create components --------- */
 
     function createComponent(type, x, y) {
       const comp = document.createElement("div");
@@ -1033,14 +1061,14 @@
         startConnection(comp, point, e);
       });
 
-      point.addEventListener("mouseenter", (e) => {
+      point.addEventListener("mouseenter", () => {
         if (connectionState.isConnecting && connectionState.activePoint.comp !== comp) {
           point.classList.add("valid-target");
           hoveredPoint = point;
         }
       });
 
-      point.addEventListener("mouseleave", (e) => {
+      point.addEventListener("mouseleave", () => {
         point.classList.remove("valid-target");
         if (hoveredPoint === point) {
           hoveredPoint = null;
@@ -1049,6 +1077,8 @@
 
       comp.appendChild(point);
     }
+
+    /* --------- Connection drawing --------- */
 
     function startConnection(comp, point, e) {
       connectionState.activePoint = { comp, point };
@@ -1089,7 +1119,7 @@
       connectionState.tempLine.style.transform = `rotate(${angle}deg)`;
     }
 
-    function onConnectionUp(e) {
+    function onConnectionUp() {
       if (!connectionState.isConnecting) return;
 
       if (hoveredPoint && connectionState.activePoint) {
@@ -1169,19 +1199,20 @@
       });
     }
 
-    // --- Physics / Simulation ---
+    /* --------- Simulation button --------- */
 
     runBtn.addEventListener("click", () => {
       const result = calculateCircuitPhysics();
       if (!result.error) {
         updateBulbs(result);
       } else {
-        // turn all bulbs off if there is an error
         const bulbs = document.querySelectorAll(".component-bulb");
         bulbs.forEach(bulb => setBulbBrightness(bulb, 0, null));
       }
       showPhysicsResults(result);
     });
+
+    /* --------- Circuit solver (graph-based) --------- */
 
     function calculateCircuitPhysics() {
       const components = Array.from(document.querySelectorAll('.component'));
@@ -1189,64 +1220,273 @@
       const resistors = components.filter(c => c.dataset.type === 'resistor');
 
       if (batteries.length === 0) {
-        return {
-          error: "No battery found in the circuit. Add a battery to power the circuit."
-        };
+        return { error: "No battery found in the circuit. Add a battery to power the circuit." };
       }
-
       if (batteries.length > 1) {
-        return {
-          error: "Multiple batteries detected. This simulation only supports circuits with one battery."
-        };
+        return { error: "Multiple batteries detected. This solver only supports one battery." };
       }
-
       if (resistors.length === 0) {
-        return {
-          error: "No resistors found in the circuit. Add at least one resistor."
-        };
+        return { error: "No resistors found in the circuit. Add at least one resistor." };
       }
-
       if (connections.length === 0) {
-        return {
-          error: "No connections found. Connect components to form a complete circuit."
-        };
+        return { error: "No wires found. Connect components using wires between terminals." };
       }
 
-      const batteryVoltage = parseFloat(batteries[0].dataset.voltage);
+      const batteryComp = batteries[0];
+      const Vb = parseFloat(batteryComp.dataset.voltage);
 
-      let totalResistance = 0;
-      const resistorData = [];
-      resistors.forEach(resistor => {
-        const R = parseFloat(resistor.dataset.resistance);
-        totalResistance += R;
-        resistorData.push({
-          id: resistor.dataset.id,
-          comp: resistor,
-          resistance: R,
-          power: 0
+      // Collect all connection points (terminals)
+      const points = Array.from(document.querySelectorAll(".connection-point"));
+      if (points.length === 0) {
+        return { error: "No terminals are connected. Add wires between terminals to form a circuit." };
+      }
+
+      const terminals = [];
+      const termIdToIndex = {};
+      points.forEach((pt, idx) => {
+        const compId = pt.dataset.componentId;
+        const type = pt.dataset.type;
+        const termId = compId + ":" + type;
+        terminals.push({ compId, type });
+        termIdToIndex[termId] = idx;
+      });
+
+      // Union-Find to group terminals into nodes
+      const parent = new Array(terminals.length);
+      for (let i = 0; i < parent.length; i++) parent[i] = i;
+
+      function find(i) {
+        while (parent[i] !== i) {
+          parent[i] = parent[parent[i]];
+          i = parent[i];
+        }
+        return i;
+      }
+      function union(i, j) {
+        const ri = find(i);
+        const rj = find(j);
+        if (ri !== rj) parent[rj] = ri;
+      }
+
+      connections.forEach(conn => {
+        const id1 = conn.comp1 + ":" + conn.point1;
+        const id2 = conn.comp2 + ":" + conn.point2;
+        const i1 = termIdToIndex[id1];
+        const i2 = termIdToIndex[id2];
+        if (i1 === undefined || i2 === undefined) return;
+        union(i1, i2);
+      });
+
+      const rootToNodeId = {};
+      let nodeCounter = 0;
+      const terminalToNode = {};
+
+      for (let i = 0; i < terminals.length; i++) {
+        const root = find(i);
+        if (!(root in rootToNodeId)) {
+          rootToNodeId[root] = "n" + (nodeCounter++);
+        }
+        const nodeId = rootToNodeId[root];
+        const t = terminals[i];
+        const termId = t.compId + ":" + t.type;
+        terminalToNode[termId] = nodeId;
+      }
+
+      const battId = batteryComp.dataset.id;
+      const posNode = terminalToNode[battId + ":positive"];
+      const negNode = terminalToNode[battId + ":negative"];
+
+      if (!posNode || !negNode) {
+        return { error: "Battery terminals are not wired correctly. Connect from + and - to the circuit." };
+      }
+      if (posNode === negNode) {
+        return { error: "Battery positive and negative are directly shorted together. This solver does not support that case." };
+      }
+
+      // Build resistor edges (between nodes)
+      const resistorEdges = [];
+      resistors.forEach(res => {
+        const cid = res.dataset.id;
+        const node1 = terminalToNode[cid + ":end1"];
+        const node2 = terminalToNode[cid + ":end2"];
+        const R = parseFloat(res.dataset.resistance);
+
+        if (!node1 || !node2 || !isFinite(R) || R <= 0) {
+          resistorEdges.push({ id: cid, comp: res, node1: null, node2: null, R, floating: true });
+        } else {
+          resistorEdges.push({ id: cid, comp: res, node1, node2, R, floating: false });
+        }
+      });
+
+      // Build adjacency for BFS over resistor graph
+      const adj = {};
+      function addEdge(u, v) {
+        if (!adj[u]) adj[u] = [];
+        if (!adj[v]) adj[v] = [];
+        adj[u].push(v);
+        adj[v].push(u);
+      }
+
+      resistorEdges.forEach(edge => {
+        if (edge.floating) return;
+        addEdge(edge.node1, edge.node2);
+      });
+
+      if (!adj[posNode]) {
+        return { error: "Battery is not connected to any resistors. Add wires from the battery to the resistors." };
+      }
+
+      // BFS from battery positive to find active nodes
+      const activeNodes = new Set();
+      const queue = [posNode];
+      activeNodes.add(posNode);
+
+      while (queue.length > 0) {
+        const u = queue.shift();
+        const neigh = adj[u] || [];
+        neigh.forEach(v => {
+          if (!activeNodes.has(v)) {
+            activeNodes.add(v);
+            queue.push(v);
+          }
         });
+      }
+
+      if (!activeNodes.has(negNode)) {
+        return { error: "Circuit is open. There is no complete path from battery + to - through resistors." };
+      }
+
+      const activeEdges = resistorEdges.filter(e =>
+        !e.floating && activeNodes.has(e.node1) && activeNodes.has(e.node2)
+      );
+
+      const unknownNodes = [];
+      activeNodes.forEach(n => {
+        if (n !== posNode && n !== negNode) unknownNodes.push(n);
       });
 
-      const current = batteryVoltage / totalResistance;
-      const power = batteryVoltage * current;
+      const nodeVolts = {};
+      nodeVolts[negNode] = 0;
+      nodeVolts[posNode] = Vb;
 
+      // Node-voltage method for unknown nodes
+      if (unknownNodes.length > 0) {
+        const N = unknownNodes.length;
+        const idxMap = {};
+        unknownNodes.forEach((n, i) => idxMap[n] = i);
+
+        const A = Array.from({ length: N }, () => Array(N).fill(0));
+        const b = Array(N).fill(0);
+
+        function knownV(node) {
+          if (node === posNode) return Vb;
+          if (node === negNode) return 0;
+          return null;
+        }
+
+        activeEdges.forEach(edge => {
+          const n1 = edge.node1;
+          const n2 = edge.node2;
+          const g = 1 / edge.R;
+
+          const i1 = idxMap[n1];
+          const i2 = idxMap[n2];
+          const v1Known = knownV(n1);
+          const v2Known = knownV(n2);
+          const n1Unknown = i1 !== undefined;
+          const n2Unknown = i2 !== undefined;
+
+          if (n1Unknown && n2Unknown) {
+            const i = i1, j = i2;
+            A[i][i] += g;
+            A[j][j] += g;
+            A[i][j] -= g;
+            A[j][i] -= g;
+          } else if (n1Unknown && !n2Unknown) {
+            const i = i1;
+            A[i][i] += g;
+            b[i] += g * v2Known;
+          } else if (!n1Unknown && n2Unknown) {
+            const j = i2;
+            A[j][j] += g;
+            b[j] += g * v1Known;
+          }
+        });
+
+        const V_unknown = solveLinearSystem(A, b);
+        if (!V_unknown) {
+          return { error: "Circuit math failed. There may be floating parts or a strange wiring pattern." };
+        }
+
+        unknownNodes.forEach((n, i) => {
+          nodeVolts[n] = V_unknown[i];
+        });
+      }
+
+      // Compute resistor currents and power
       let maxPower = 0;
-      resistorData.forEach(r => {
-        r.power = current * current * r.resistance;
-        if (r.power > maxPower) maxPower = r.power;
+      let totalCurrentFromBattery = 0;
+      const resistorData = [];
+
+      resistorEdges.forEach(edge => {
+        const R = edge.R;
+        const node1 = edge.node1;
+        const node2 = edge.node2;
+        const comp = edge.comp;
+
+        let V1 = nodeVolts[node1];
+        let V2 = nodeVolts[node2];
+        let I = 0;
+        let P = 0;
+
+        if (V1 === undefined || V2 === undefined || !isFinite(R) || R <= 0) {
+          I = 0;
+          P = 0;
+        } else {
+          I = (V1 - V2) / R;
+          P = I * I * R;
+          if (!isFinite(P)) {
+            I = 0;
+            P = 0;
+          }
+        }
+
+        resistorData.push({
+          id: edge.id,
+          comp,
+          resistance: R,
+          power: P,
+          current: I
+        });
+
+        if (P > maxPower) maxPower = P;
+
+        // current leaving battery positive
+        if (node1 === posNode && V1 !== undefined && V2 !== undefined) {
+          totalCurrentFromBattery += (V1 - V2) / R;
+        } else if (node2 === posNode && V1 !== undefined && V2 !== undefined) {
+          totalCurrentFromBattery += (V2 - V1) / R;
+        }
       });
 
-      const circuitType = resistors.length > 1 ? "Series Circuit (simplified)" : "Simple Circuit";
+      if (!isFinite(totalCurrentFromBattery) || Math.abs(totalCurrentFromBattery) < 1e-12) {
+        return { error: "Circuit behaves like an open circuit. No current flows." };
+      }
+
+      const totalCurrent = totalCurrentFromBattery;
+      const eqResistance = Vb / totalCurrent;
+      const totalPower = Vb * totalCurrent;
 
       return {
-        batteryVoltage,
-        totalResistance,
-        current,
-        power,
-        circuitType,
+        batteryVoltage: Vb,
+        totalResistance: eqResistance,
+        current: totalCurrent,
+        power: totalPower,
+        circuitType: "General DC resistor network",
         resistorCount: resistors.length,
         resistorData,
         maxPower,
+        nodeVoltages: nodeVolts,
         error: null
       };
     }
@@ -1278,18 +1518,18 @@
             </div>
             <div class="physics-result-item">
               <span class="physics-label">Battery Voltage:</span>
-              <span class="physics-value">${result.batteryVoltage} V</span>
+              <span class="physics-value">${result.batteryVoltage.toFixed(3)} V</span>
             </div>
             <div class="physics-result-item">
-              <span class="physics-label">Total Resistance:</span>
+              <span class="physics-label">Equivalent Resistance:</span>
               <span class="physics-value">${formatResistance(result.totalResistance)}</span>
             </div>
             <div class="physics-result-item">
-              <span class="physics-label">Current:</span>
+              <span class="physics-label">Total Current:</span>
               <span class="physics-value">${result.current.toFixed(4)} A</span>
             </div>
             <div class="physics-result-item">
-              <span class="physics-label">Power (battery):</span>
+              <span class="physics-label">Total Power:</span>
               <span class="physics-value">${result.power.toFixed(4)} W</span>
             </div>
             <div class="physics-result-item">
@@ -1322,11 +1562,11 @@
       });
 
       if (!result.error) {
-        statusEl.innerHTML = `Status: <strong>Circuit simulation done. Total resistance: ${formatResistance(result.totalResistance)}, Current: ${result.current.toFixed(4)}A</strong>`;
+        statusEl.innerHTML = `Status: <strong>Simulation done. R<sub>eq</sub> = ${formatResistance(result.totalResistance)}, I = ${result.current.toFixed(4)}A</strong>`;
       }
     }
 
-    // --- Bulb brightness mapping ---
+    /* --------- Bulb brightness vs resistor power --------- */
 
     function getComponentCenter(comp) {
       const canvasRect = canvas.getBoundingClientRect();
@@ -1360,7 +1600,7 @@
           }
         });
 
-        const ATTACH_DISTANCE = 80; // pixels
+        const ATTACH_DISTANCE = 80;
 
         if (!attachedResistor || bestDist > ATTACH_DISTANCE || maxPower === 0) {
           setBulbBrightness(bulb, 0, null);
@@ -1372,7 +1612,6 @@
     }
 
     function setBulbBrightness(bulb, fraction, power) {
-      const inner = bulb.querySelector(".component-inner");
       const property = bulb.querySelector(".component-property");
 
       bulb.classList.remove("off", "dim", "medium", "bright");
@@ -1399,7 +1638,7 @@
       bulb.dataset.brightness = fraction.toFixed(3);
     }
 
-    // --- Dragging placed components ---
+    /* --------- Dragging components --------- */
 
     function makeComponentDraggable(comp) {
       comp.addEventListener("mousedown", (e) => {
@@ -1481,7 +1720,7 @@
       });
     }
 
-    function onMouseUp(e) {
+    function onMouseUp() {
       if (!dragState) return;
 
       const { comp } = dragState;
@@ -1519,7 +1758,7 @@
       });
     }
 
-    // --- Clear button ---
+    /* --------- Clear workspace --------- */
 
     clearBtn.addEventListener("click", () => {
       canvas.innerHTML = "";
